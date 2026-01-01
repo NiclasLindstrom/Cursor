@@ -135,6 +135,7 @@ body {
     position: relative;
     display: inline-block;
     max-width: 500px;
+    min-height: 250px;
     width: 100%;
 }
 
@@ -172,6 +173,16 @@ body {
     width: 100%;
     height: 2px;
     transform: translateY(-50%);
+    animation: crosshair-float 2s ease-in-out infinite;
+}
+
+@keyframes crosshair-float {
+    0%, 100% {
+        top: 60%;
+    }
+    50% {
+        top: 40%;
+    }
 }
 
 .crosshair-vertical {
