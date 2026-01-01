@@ -8,7 +8,9 @@ import os
 load_dotenv()
 
 app = Flask(__name__, static_folder='static')
-CORS(app)  # Enable CORS for frontend
+# Enable CORS for frontend - allow all origins for cloud deployment
+# In production, you may want to restrict this to specific domains
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Database configuration
 DB_CONFIG = {
@@ -235,5 +237,34 @@ def health_check():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # SSL configuration
+    ssl_enabled = os.getenv('SSL_ENABLED', 'false').lower() == 'true'
+    cert_file = os.getenv('SSL_CERT', 'cert.pem')
+    key_file = os.getenv('SSL_KEY', 'key.pem')
+    
+    port = int(os.getenv('PORT', 5000))
+    
+    if ssl_enabled:
+        # Check if certificate files exist
+        if os.path.exists(cert_file) and os.path.exists(key_file):
+            print(f"Starting Flask server with HTTPS on port {port}")
+            print(f"Certificate: {cert_file}")
+            print(f"Key: {key_file}")
+            app.run(
+                debug=True,
+                host='0.0.0.0',
+                port=port,
+                ssl_context=(cert_file, key_file)
+            )
+        else:
+            print(f"⚠ SSL enabled but certificate files not found!")
+            print(f"   Looking for: {cert_file} and {key_file}")
+            print(f"   Run 'python generate_cert.py' to generate self-signed certificates")
+            print(f"   Or set SSL_ENABLED=false in .env to use HTTP")
+            print(f"\nStarting Flask server with HTTP on port {port}")
+            app.run(debug=True, host='0.0.0.0', port=port)
+    else:
+        print(f"Starting Flask server with HTTP on port {port}")
+        print(f"To enable HTTPS, set SSL_ENABLED=true in .env and generate certificates")
+        app.run(debug=True, host='0.0.0.0', port=port)
 

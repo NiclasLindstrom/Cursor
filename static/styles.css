@@ -89,15 +89,41 @@ header h1 {
     max-width: 500px;
     border-radius: 8px;
     background: #000;
+    display: block;
+    margin: 0 auto;
+}
+
+.camera-error {
+    background: #ffebee;
+    color: #c62828;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ef5350;
+}
+
+.camera-error.hidden {
+    display: none;
 }
 
 .camera-controls {
     margin-top: 15px;
 }
 
-.actions {
-    padding: 20px 30px;
-    border-bottom: 1px solid #e0e0e0;
+/* Result Area */
+.result-area {
+    padding: 40px 30px;
+    min-height: 300px;
+}
+
+.welcome-message {
+    text-align: center;
+    color: #666;
+    font-size: 1.1em;
+}
+
+.welcome-message p {
+    margin: 0;
 }
 
 .btn {
@@ -351,6 +377,173 @@ textarea {
     margin-bottom: 10px;
 }
 
+/* Article Display (when found) */
+.article-display {
+    padding: 30px;
+}
+
+.article-card-large {
+    background: #f8f9fa;
+    border: 2px solid #667eea;
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.article-header-large {
+    margin-bottom: 20px;
+}
+
+.article-header-large h2 {
+    font-size: 2em;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.article-ean-large {
+    color: #666;
+    font-size: 1.1em;
+    font-family: monospace;
+    font-weight: 500;
+}
+
+.article-description-large {
+    color: #555;
+    margin: 20px 0;
+    line-height: 1.6;
+    font-size: 1.05em;
+}
+
+.article-details-large {
+    display: flex;
+    gap: 40px;
+    margin: 30px 0;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+}
+
+.detail-item-large {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-value-large {
+    font-size: 2em;
+    font-weight: 700;
+    color: #667eea;
+    margin-top: 5px;
+}
+
+/* Quantity Controls */
+.quantity-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin: 30px 0;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+}
+
+.btn-quantity {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 2em;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 2px solid;
+    transition: all 0.2s;
+}
+
+.btn-plus {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.btn-plus:hover {
+    background: #218838;
+    border-color: #218838;
+    transform: scale(1.1);
+}
+
+.btn-minus {
+    background: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.btn-minus:hover {
+    background: #c82333;
+    border-color: #c82333;
+    transform: scale(1.1);
+}
+
+.quantity-change-indicator {
+    font-size: 2em;
+    font-weight: bold;
+    min-width: 80px;
+    text-align: center;
+    padding: 10px 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+#applyQuantityBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.article-actions-large {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.article-actions-large .btn {
+    padding: 15px 30px;
+    font-size: 1.1em;
+}
+
+/* Add Article Form (when not found) */
+.add-article-form {
+    padding: 30px;
+}
+
+.form-card {
+    background: #f8f9fa;
+    border: 2px dashed #667eea;
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.form-card h2 {
+    font-size: 1.8em;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.form-subtitle {
+    color: #666;
+    margin-bottom: 25px;
+    font-size: 1.1em;
+}
+
+.form-subtitle strong {
+    color: #667eea;
+    font-family: monospace;
+    font-size: 1.2em;
+}
+
 @media (max-width: 768px) {
     header h1 {
         font-size: 2em;
@@ -371,6 +564,44 @@ textarea {
 
     .article-actions .btn {
         width: 100%;
+    }
+
+    .search-container {
+        flex-wrap: wrap;
+    }
+
+    .search-container button {
+        flex: 1;
+        min-width: 100px;
+    }
+
+    .article-card-large {
+        padding: 20px;
+    }
+
+    .article-header-large h2 {
+        font-size: 1.5em;
+    }
+
+    .article-details-large {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .quantity-controls {
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .btn-quantity {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5em;
+    }
+
+    .quantity-change-indicator {
+        font-size: 1.5em;
+        min-width: 60px;
     }
 }
 

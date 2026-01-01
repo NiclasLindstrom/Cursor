@@ -54,9 +54,17 @@ DB_NAME=inventory_db
 DB_USER=root
 DB_PASSWORD=your_password_here
 DB_PORT=3306
+
+# Optional: Enable HTTPS (required for camera access in Chrome)
+SSL_ENABLED=true
+SSL_CERT=cert.pem
+SSL_KEY=key.pem
+PORT=5000
 ```
 
 Replace `your_password_here` with your MySQL root password.
+
+**Note:** If you enable HTTPS, you'll need to generate SSL certificates first (see step 4 below).
 
 ### 3. Install Python Dependencies
 
@@ -64,7 +72,19 @@ Replace `your_password_here` with your MySQL root password.
 pip install -r requirements.txt
 ```
 
-### 4. Run the Application
+### 4. Generate SSL Certificates (Optional, but recommended for camera access)
+
+For camera access in Chrome, HTTPS is required. Generate self-signed certificates:
+
+```bash
+python generate_cert.py
+```
+
+This creates `cert.pem` and `key.pem` files. **Note:** Your browser will show a security warning for self-signed certificates - this is normal for development. Click "Advanced" → "Proceed to localhost" to continue.
+
+**For production:** Use a reverse proxy (nginx/Apache) with Let's Encrypt certificates.
+
+### 5. Run the Application
 
 Start the Flask server:
 
@@ -74,15 +94,16 @@ python app.py
 
 The backend will be available at `http://localhost:5000`
 
-### 5. Access the Application
+### 6. Access the Application
 
 Open your web browser and navigate to:
 
-```
-http://localhost:5000
-```
+- **HTTP:** `http://localhost:5000`
+- **HTTPS:** `https://localhost:5000` (if SSL is enabled)
 
 The Flask server serves both the API and the frontend, so everything is accessible from one URL.
+
+**Important for Camera Access:** Chrome requires HTTPS (or localhost) for camera access. If you're using HTTPS, your browser will show a security warning for self-signed certificates - click "Advanced" → "Proceed to localhost" to continue.
 
 ## Usage
 

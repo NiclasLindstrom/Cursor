@@ -12,6 +12,12 @@ ENV/
 # Environment variables
 .env
 
+# SSL certificates (never commit private keys!)
+*.pem
+!requirements.txt
+cert.pem
+key.pem
+
 # IDE
 .vscode/
 .idea/
