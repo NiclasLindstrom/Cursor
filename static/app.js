@@ -28,6 +28,54 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// Language configuration (loaded from server)
+let lang = {
+    appTitle: '📦 Lagerhantering',
+    exportCSV: 'Exportera CSV',
+    logout: 'Logga ut',
+    searchPlaceholder: 'Ange eller skanna EAN-kod...',
+    scanBarcode: 'Skanna streckkod',
+    scan: 'Skanna',
+    scanning: 'Skannar...',
+    stopScanning: 'Stoppa skanning',
+    welcomeMessage: 'Ange en EAN-kod eller skanna en streckkod för att komma igång',
+    currentQuantity: 'Nuvarande kvantitet',
+    price: 'Pris',
+    apply: 'Tillämpa',
+    editArticle: 'Redigera artikel',
+    articleNotFound: 'Artikel hittades inte - Lägg till ny artikel',
+    eanCode: 'EAN-kod',
+    name: 'Namn',
+    description: 'Beskrivning',
+    initialQuantity: 'Initial kvantitet',
+    cancel: 'Avbryt',
+    addArticle: 'Lägg till artikel',
+    editArticleTitle: 'Redigera artikel',
+    saveChanges: 'Spara ändringar',
+    currency: 'SEK',
+    currencyPosition: 'after',
+    connected: '✓ Ansluten till',
+    connectionIssue: '⚠ API-anslutningsproblem',
+    cannotConnect: '✗ Kan inte ansluta till API',
+    ean: 'EAN',
+    required: '*',
+    pleaseEnterEan: 'Vänligen ange en EAN-kod',
+    quantityCannotBeNegative: 'Kvantiteten kan inte vara negativ',
+    quantityUpdatedTo: 'Kvantitet uppdaterad till',
+    failedToUpdateQuantity: 'Misslyckades att uppdatera kvantitet',
+    eanCodeAndNameRequired: 'EAN-kod och namn krävs',
+    articleCreatedSuccessfully: 'Artikel skapad framgångsrikt',
+    articleUpdatedSuccessfully: 'Artikel uppdaterad framgångsrikt',
+    failedToCreateArticle: 'Misslyckades att skapa artikel',
+    failedToUpdateArticle: 'Misslyckades att uppdatera artikel',
+    failedToLookupArticle: 'Misslyckades att söka artikel',
+    cannotConnectToServer: 'Kan inte ansluta till servern',
+    barcodeScannerNotLoaded: 'Streckkodsskannerbiblioteket är inte laddat. Vänligen uppdatera sidan',
+    errorLoadingVideoStream: 'Fel vid laddning av videoström. Försök igen',
+    csvExportedSuccessfully: 'CSV exporterad framgångsrikt',
+    failedToExportCsv: 'Misslyckades att exportera CSV'
+};
+
 let currentArticle = null;
 let scannerActive = false;
 let quantityChange = 0;
@@ -45,6 +93,8 @@ const addArticleForm = document.getElementById('addArticleForm');
 const articleModal = document.getElementById('articleModal');
 const articleForm = document.getElementById('articleForm');
 const editArticleForm = document.getElementById('editArticleForm');
+const exportBtn = document.getElementById('exportBtn');
+const logoutBtn = document.getElementById('logoutBtn');
 
 // Article display elements
 const articleNameDisplay = document.getElementById('articleNameDisplay');
@@ -78,12 +128,108 @@ const cancelEditBtn = document.getElementById('cancelEditBtn');
 const closeModal = document.getElementById('closeModal');
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadLanguage();
+    applyLanguage();
     checkApiConnection();
     setupEventListeners();
     // Focus on search input
     searchInput.focus();
 });
+
+// Load language configuration from server
+async function loadLanguage() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/language`);
+        if (response.ok) {
+            lang = await response.json();
+        }
+    } catch (error) {
+        console.log('Using default language configuration');
+    }
+}
+
+// Apply language to UI elements
+function applyLanguage() {
+    // Update HTML elements
+    if (document.querySelector('.toolbar-left h1')) {
+        document.querySelector('.toolbar-left h1').textContent = lang.appTitle;
+    }
+    if (exportBtn) exportBtn.title = lang.exportCSV;
+    if (logoutBtn) logoutBtn.title = lang.logout;
+    if (searchInput) searchInput.placeholder = lang.searchPlaceholder;
+    if (scanBtn) {
+        scanBtn.title = lang.scanBarcode;
+        scanBtn.innerHTML = `<i class="fa-solid fa-barcode"></i> ${lang.scan}`;
+    }
+    if (stopScanBtn) stopScanBtn.textContent = lang.stopScanning;
+    
+    // Update welcome message
+    const welcomeMsg = document.querySelector('.welcome-message p');
+    if (welcomeMsg) welcomeMsg.textContent = lang.welcomeMessage;
+    
+    // Update article display labels
+    const currentQtyLabel = document.querySelector('.detail-item-large .detail-label');
+    if (currentQtyLabel) {
+        currentQtyLabel.textContent = lang.currentQuantity;
+    }
+    const priceLabel = document.querySelector('#priceDisplayContainer .detail-label');
+    if (priceLabel) {
+        priceLabel.textContent = lang.price;
+    }
+    if (applyQuantityBtn) applyQuantityBtn.textContent = lang.apply;
+    if (editArticleBtn) editArticleBtn.textContent = lang.editArticle;
+    
+    // Update add form
+    const addFormTitle = document.querySelector('#addArticleForm h2');
+    if (addFormTitle) addFormTitle.textContent = lang.articleNotFound;
+    
+    const eanLabel = document.querySelector('label[for="eanCode"]');
+    if (eanLabel) eanLabel.textContent = `${lang.eanCode} ${lang.required}`;
+    
+    const nameLabel = document.querySelector('label[for="articleName"]');
+    if (nameLabel) nameLabel.textContent = `${lang.name} ${lang.required}`;
+    
+    const descLabel = document.querySelector('label[for="description"]');
+    if (descLabel) descLabel.textContent = lang.description;
+    
+    const qtyLabel = document.querySelector('label[for="quantity"]');
+    if (qtyLabel) qtyLabel.textContent = `${lang.initialQuantity} ${lang.required}`;
+    
+    const priceLabelInput = document.querySelector('label[for="price"]');
+    if (priceLabelInput) priceLabelInput.textContent = lang.price;
+    
+    const cancelAdd = document.getElementById('cancelAddBtn');
+    if (cancelAdd) cancelAdd.textContent = lang.cancel;
+    
+    const addArticleBtn = document.querySelector('#articleForm button[type="submit"]');
+    if (addArticleBtn) addArticleBtn.textContent = lang.addArticle;
+    
+    // Update edit form
+    const editFormTitle = document.querySelector('#articleModal h2');
+    if (editFormTitle) editFormTitle.textContent = lang.editArticleTitle;
+    
+    const editEanLabel = document.querySelector('label[for="editEanCode"]');
+    if (editEanLabel) editEanLabel.textContent = lang.eanCode;
+    
+    const editNameLabel = document.querySelector('label[for="editArticleName"]');
+    if (editNameLabel) editNameLabel.textContent = `${lang.name} ${lang.required}`;
+    
+    const editDescLabel = document.querySelector('label[for="editDescription"]');
+    if (editDescLabel) editDescLabel.textContent = lang.description;
+    
+    const editQtyLabel = document.querySelector('label[for="editQuantity"]');
+    if (editQtyLabel) editQtyLabel.textContent = lang.currentQuantity;
+    
+    const editPriceLabel = document.querySelector('label[for="editPrice"]');
+    if (editPriceLabel) editPriceLabel.textContent = lang.price;
+    
+    const cancelEdit = document.getElementById('cancelEditBtn');
+    if (cancelEdit) cancelEdit.textContent = lang.cancel;
+    
+    const saveBtn = document.querySelector('#editArticleForm button[type="submit"]');
+    if (saveBtn) saveBtn.textContent = lang.saveChanges;
+}
 
 // Check API connection on startup
 async function checkApiConnection() {
@@ -130,6 +276,14 @@ function setupEventListeners() {
     cancelEditBtn.addEventListener('click', closeEditModal);
     closeModal.addEventListener('click', closeEditModal);
     
+    // Export and logout
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportToCSV);
+    }
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+    
     // Close modal on outside click
     articleModal.addEventListener('click', (e) => {
         if (e.target === articleModal) {
@@ -144,7 +298,7 @@ async function handleSearchSubmit(e) {
     const searchTerm = searchInput.value.trim();
     
     if (!searchTerm) {
-        showError('Please enter an EAN code');
+        showError(lang.pleaseEnterEan);
         return;
     }
     
@@ -173,7 +327,7 @@ async function lookupArticle(eanCode) {
         if (error.message.includes('Failed to fetch')) {
             showError(`Cannot connect to server. Check if backend is running at ${API_BASE_URL}`);
         } else {
-            showError('Failed to lookup article: ' + error.message);
+            showError(lang.failedToLookupArticle + ': ' + error.message);
         }
     }
 }
@@ -190,7 +344,7 @@ function displayArticle(article) {
     
     // Populate article data
     articleNameDisplay.textContent = article.name;
-    articleEanDisplay.textContent = `EAN: ${article.ean_code}`;
+    articleEanDisplay.textContent = `${lang.ean}: ${article.ean_code}`;
     
     if (article.description) {
         articleDescriptionDisplay.textContent = article.description;
@@ -202,7 +356,12 @@ function displayArticle(article) {
     articleQuantityDisplay.textContent = article.quantity || 0;
     
     if (article.price) {
-        articlePriceDisplay.textContent = `$${parseFloat(article.price).toFixed(2)}`;
+        const priceValue = parseFloat(article.price).toFixed(2);
+        if (lang.currencyPosition === 'after') {
+            articlePriceDisplay.textContent = `${priceValue} ${lang.currency}`;
+        } else {
+            articlePriceDisplay.textContent = `${lang.currency} ${priceValue}`;
+        }
         priceDisplayContainer.style.display = 'flex';
     } else {
         priceDisplayContainer.style.display = 'none';
@@ -226,7 +385,10 @@ function showAddForm(eanCode) {
     
     // Set EAN code (readonly)
     eanCodeInput.value = eanCode;
-    newArticleEan.textContent = eanCode;
+    const eanLabel = document.querySelector('#addArticleForm .form-subtitle');
+    if (eanLabel) {
+        eanLabel.innerHTML = `${lang.eanCode}: <strong>${eanCode}</strong>`;
+    }
     
     // Reset form
     articleNameInput.value = '';
@@ -275,7 +437,7 @@ async function applyQuantityChange() {
     const newQuantity = (currentArticle.quantity || 0) + quantityChange;
     
     if (newQuantity < 0) {
-        showError('Quantity cannot be negative');
+        showError(lang.quantityCannotBeNegative);
         return;
     }
     
@@ -283,9 +445,9 @@ async function applyQuantityChange() {
         await updateArticle(currentArticle.ean_code, { quantity: newQuantity });
         currentArticle.quantity = newQuantity;
         displayArticle(currentArticle); // Refresh display
-        showSuccess(`Quantity updated to ${newQuantity}`);
+        showSuccess(`${lang.quantityUpdatedTo} ${newQuantity}`);
     } catch (error) {
-        showError('Failed to update quantity: ' + error.message);
+        showError(lang.failedToUpdateQuantity + ': ' + error.message);
     }
 }
 
@@ -320,17 +482,17 @@ async function handleAddArticleSubmit(e) {
     };
     
     if (!articleData.ean_code || !articleData.name) {
-        showError('EAN code and name are required');
+        showError(lang.eanCodeAndNameRequired);
         return;
     }
     
     try {
         await createArticle(articleData);
-        showSuccess('Article created successfully');
+        showSuccess(lang.articleCreatedSuccessfully);
         // Look up the newly created article to display it
         await lookupArticle(articleData.ean_code);
     } catch (error) {
-        showError(error.message || 'Failed to create article');
+        showError(error.message || lang.failedToCreateArticle);
     }
 }
 
@@ -349,12 +511,12 @@ async function handleEditArticleSubmit(e) {
     
     try {
         await updateArticle(currentArticle.ean_code, updateData);
-        showSuccess('Article updated successfully');
+        showSuccess(lang.articleUpdatedSuccessfully);
         closeEditModal();
         // Refresh article display
         await lookupArticle(currentArticle.ean_code);
     } catch (error) {
-        showError(error.message || 'Failed to update article');
+        showError(error.message || lang.failedToUpdateArticle);
     }
 }
 
@@ -431,13 +593,13 @@ function toggleBarcodeScanner() {
 function startBarcodeScanner() {
     // Check if QuaggaJS is loaded
     if (typeof Quagga === 'undefined') {
-        showError('Barcode scanner library not loaded. Please refresh the page.');
+        showError(lang.barcodeScannerNotLoaded);
         return;
     }
     
     scannerActive = true;
     cameraContainer.classList.remove('hidden');
-    scanBtn.textContent = '📷 Scanning...';
+    scanBtn.innerHTML = `<i class="fa-solid fa-barcode"></i> ${lang.scanning}`;
     scanBtn.disabled = true;
     
     // Hide any previous error messages
@@ -446,18 +608,21 @@ function startBarcodeScanner() {
         cameraError.classList.add('hidden');
     }
     
+    // Clear video element
+    video.srcObject = null;
+    video.src = '';
+    
     // Use QuaggaJS for barcode scanning
-    // Quagga will handle camera access and permissions
+    // Simplified constraints for better compatibility, especially with iOS
     Quagga.init({
         inputStream: {
             name: "Live",
             type: "LiveStream",
             target: video,
             constraints: {
-                width: { min: 640, ideal: 1280, max: 1920 },
-                height: { min: 480, ideal: 720, max: 1080 },
-                facingMode: "environment", // Use back camera on mobile, front on desktop
-                aspectRatio: { ideal: 1.7777777778 } // 16:9
+                width: 640,
+                height: 480,
+                facingMode: "environment" // Use back camera on mobile
             }
         },
         decoder: {
@@ -468,19 +633,13 @@ function startBarcodeScanner() {
                 "code_39_reader",
                 "upc_reader",
                 "upc_e_reader"
-            ],
-            debug: {
-                drawBoundingBox: true,
-                showFrequency: false,
-                drawScanline: true,
-                showPattern: false
-            }
+            ]
         },
         locator: {
             patchSize: "medium",
             halfSample: true
         },
-        numOfWorkers: 2,
+        numOfWorkers: 0, // Disable workers for better compatibility
         frequency: 10
     }, (err) => {
         if (err) {
@@ -504,14 +663,93 @@ function startBarcodeScanner() {
         }
         
         console.log('Quagga initialized successfully');
+        
+        // Ensure video is visible
+        video.style.display = 'block';
+        
+        // Clear any previous error messages
+        const cameraError = document.getElementById('cameraError');
+        if (cameraError) {
+            cameraError.classList.add('hidden');
+        }
+        
+        // Track if video successfully loaded
+        let videoLoaded = false;
+        let errorTimeout = null;
+        
+        // Set up error handler with delay to avoid false positives
+        const errorHandler = (e) => {
+            console.error('Video error:', e);
+            // Only show error if video hasn't loaded after a delay
+            errorTimeout = setTimeout(() => {
+                if (!videoLoaded && cameraError) {
+                    cameraError.textContent = lang.errorLoadingVideoStream;
+                    cameraError.classList.remove('hidden');
+                }
+            }, 2000); // Wait 2 seconds before showing error
+        };
+        
+        // Remove any existing error listeners and add new one
+        video.removeEventListener('error', errorHandler);
+        video.addEventListener('error', errorHandler, { once: true });
+        
+        // Track successful video load
+        const successHandler = () => {
+            videoLoaded = true;
+            if (errorTimeout) {
+                clearTimeout(errorTimeout);
+            }
+            if (cameraError) {
+                cameraError.classList.add('hidden');
+            }
+        };
+        
+        video.addEventListener('playing', successHandler, { once: true });
+        video.addEventListener('loadedmetadata', () => {
+            console.log('Video metadata loaded, dimensions:', video.videoWidth, 'x', video.videoHeight);
+        }, { once: true });
+        
+        // Workaround for iOS and some browsers: Manually get and attach video stream
+        // QuaggaJS sometimes doesn't properly attach the stream to the video element
+        setTimeout(() => {
+            // Always try to manually attach stream for better iOS compatibility
+            console.log('Manually attaching video stream for better compatibility...');
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: 640,
+                    height: 480,
+                    facingMode: "environment"
+                }
+            }).then(stream => {
+                video.srcObject = stream;
+                return video.play();
+            }).then(() => {
+                console.log('Video stream attached and playing successfully');
+                videoLoaded = true;
+                if (errorTimeout) {
+                    clearTimeout(errorTimeout);
+                }
+                if (cameraError) {
+                    cameraError.classList.add('hidden');
+                }
+            }).catch(e => {
+                console.error('Error manually attaching video stream:', e);
+                // Only show error if Quagga also fails (check after delay)
+            });
+        }, 300);
+        
         Quagga.start();
         
         // Listen for barcode detection
         Quagga.onDetected((result) => {
             const code = result.codeResult.code;
-            if (code) {
+            if (code && code.length > 0) {
                 console.log('Barcode detected:', code);
-                handleBarcodeScanned(code);
+                // Only process if we have a valid code (not empty or random)
+                // EAN codes are typically 8-13 digits
+                if (code.length >= 8 && code.length <= 13) {
+                    handleBarcodeScanned(code);
+                }
             }
         });
     });
@@ -545,7 +783,7 @@ function stopBarcodeScanner() {
     }
     
     // Reset button
-    scanBtn.textContent = '📷 Scan';
+    scanBtn.innerHTML = `<i class="fa-solid fa-barcode"></i> ${lang.scan}`;
     scanBtn.disabled = false;
 }
 
@@ -571,6 +809,62 @@ function showSuccess(message) {
     notification.textContent = message;
     document.body.appendChild(notification);
     setTimeout(() => notification.remove(), 3000);
+}
+
+// Export to CSV
+async function exportToCSV() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/export/csv`, {
+            method: 'GET',
+            credentials: 'include' // Include cookies for session
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Not authenticated, redirect to login
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to export CSV');
+        }
+        
+        // Get the blob and create download link
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'inventory_export.csv';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showSuccess(lang.csvExportedSuccessfully);
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        showError(lang.failedToExportCsv + ': ' + error.message);
+    }
+}
+
+// Logout
+async function handleLogout() {
+    try {
+        const response = await fetch('/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            window.location.href = '/login';
+        } else {
+            // Even if request fails, redirect to login
+            window.location.href = '/login';
+        }
+    } catch (error) {
+        console.error('Error logging out:', error);
+        // Redirect to login anyway
+        window.location.href = '/login';
+    }
 }
 
 // Log API URL for debugging

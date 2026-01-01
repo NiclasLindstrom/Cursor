@@ -55,6 +55,10 @@ DB_USER=root
 DB_PASSWORD=your_password_here
 DB_PORT=3306
 
+# Authentication (REQUIRED - change the default password!)
+ADMIN_PASSWORD=your_secure_password_here
+SECRET_KEY=your_secret_key_here
+
 # Optional: Enable HTTPS (required for camera access in Chrome)
 SSL_ENABLED=true
 SSL_CERT=cert.pem
