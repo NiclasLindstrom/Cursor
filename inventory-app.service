@@ -1,0 +1,23 @@
+[Unit]
+Description=Inventory Management Application
+After=network.target mysql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/your/inventory/app
+Environment="PATH=/path/to/your/venv/bin"
+ExecStart=/path/to/your/venv/bin/gunicorn \
+    --config gunicorn_config.py \
+    app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

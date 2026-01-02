@@ -29,10 +29,97 @@ A full-stack web application for managing inventory with barcode scanning capabi
 1. **Create database**: `CREATE DATABASE inventory_db;`
 2. **Create `.env` file** with your MySQL credentials (see Setup Instructions below)
 3. **Install dependencies**: `pip install -r requirements.txt`
-4. **Run the app**: `python app.py`
+4. **Run the app**: `python app.py` (development) or see Production Mode below
 5. **Open browser**: `http://localhost:5000`
 
 For detailed testing instructions, see [TESTING_GUIDE.md](TESTING_GUIDE.md)
+
+## Production Deployment with Gunicorn
+
+### Quick Start
+
+1. Install dependencies (including Gunicorn):
+```bash
+pip install -r requirements.txt
+```
+
+2. Run with Gunicorn:
+```bash
+gunicorn --config gunicorn_config.py app:app
+```
+
+Or with custom settings:
+```bash
+gunicorn -w 4 -b 0.0.0.0:5000 app:app
+```
+
+### Running as a Systemd Service (Recommended)
+
+1. Edit the `inventory-app.service` file and update the paths:
+   - `WorkingDirectory`: Full path to your application directory
+   - `User` and `Group`: Your server user (e.g., `www-data`, `nginx`, or your username)
+   - `Environment PATH`: Path to your virtual environment's bin directory
+   - `ExecStart`: Full path to gunicorn in your virtual environment
+
+2. Copy the service file to systemd:
+```bash
+sudo cp inventory-app.service /etc/systemd/system/
+```
+
+3. Reload systemd and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable inventory-app
+sudo systemctl start inventory-app
+```
+
+4. Check status:
+```bash
+sudo systemctl status inventory-app
+```
+
+5. View logs:
+```bash
+sudo journalctl -u inventory-app -f
+```
+
+### HTTPS with Reverse Proxy (Nginx)
+
+For production HTTPS, use Nginx as a reverse proxy:
+
+1. Install Nginx:
+```bash
+sudo apt-get install nginx
+```
+
+2. Create Nginx configuration (`/etc/nginx/sites-available/inventory-app`):
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+3. Enable the site:
+```bash
+sudo ln -s /etc/nginx/sites-available/inventory-app /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+4. Set up SSL with Let's Encrypt:
+```bash
+sudo apt-get install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
 
 ## Setup Instructions
 

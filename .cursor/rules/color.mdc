@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+Do not use gradient colors anywhere in the UI.
