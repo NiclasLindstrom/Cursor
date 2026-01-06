@@ -31,6 +31,6 @@ group = None
 tmp_upload_dir = None
 
 # SSL (Note: For production, use a reverse proxy like nginx for SSL)
-# keyfile = os.getenv('SSL_KEY', None)
-# certfile = os.getenv('SSL_CERT', None)
+keyfile = os.getenv('SSL_KEY', None)
+certfile = os.getenv('SSL_CERT', None)
 
