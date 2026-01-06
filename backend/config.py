@@ -98,9 +98,11 @@ class Settings(BaseSettings):
         
         env_file: Tells pydantic to load from .env file
         case_sensitive: Environment variable names are case-insensitive
+        extra: Allow extra fields (ignores undefined env vars)
         """
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra fields not defined in model
         # This allows us to use uppercase env vars like DB_HOST
 
 

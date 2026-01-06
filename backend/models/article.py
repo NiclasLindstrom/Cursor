@@ -45,7 +45,6 @@ class ArticleBase(BaseModel):
     price: Optional[Decimal] = Field(
         None,
         ge=0,
-        decimal_places=2,
         description="Price per unit",
         example=99.99
     )
@@ -105,7 +104,6 @@ class ArticleUpdate(BaseModel):
     price: Optional[Decimal] = Field(
         None,
         ge=0,
-        decimal_places=2,
         description="Updated price"
     )
     
