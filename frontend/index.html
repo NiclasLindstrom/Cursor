@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lagerhantering</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <h1>📦 Inventory Management</h1>
+            <div id="apiStatus" class="api-status"></div>
+        </div>
+        <div class="toolbar-right">
+            <button id="exportBtn" class="toolbar-btn" title="Export CSV">
+                <i class="fa-solid fa-download"></i>
+            </button>
+            <button id="logoutBtn" class="toolbar-btn" title="Logout">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div class="search-section">
+            <form id="searchForm" class="search-container">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Enter or scan EAN code..."
+                    autocomplete="off"
+                    required
+                >
+                <button type="button" id="scanBtn" class="scan-btn" title="Scan Barcode">
+                    <i class="fa-solid fa-barcode"></i> Scan
+                </button>
+            </form>
+            <div id="cameraContainer" class="camera-container hidden">
+                <div id="cameraError" class="camera-error hidden"></div>
+                <div class="video-wrapper">
+                    <video id="video" autoplay playsinline muted></video>
+                    <div class="crosshair">
+                        <div class="crosshair-line crosshair-horizontal"></div>
+                        <div class="crosshair-corner crosshair-top-left"></div>
+                        <div class="crosshair-corner crosshair-top-right"></div>
+                        <div class="crosshair-corner crosshair-bottom-left"></div>
+                        <div class="crosshair-corner crosshair-bottom-right"></div>
+                    </div>
+                </div>
+                <canvas id="canvas" class="hidden"></canvas>
+                <div class="camera-controls">
+                    <button id="stopScanBtn" class="btn btn-secondary">Stop Scanning</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultArea" class="result-area">
+            <div class="welcome-message">
+                <p>Enter an EAN code or scan a barcode to get started</p>
+            </div>
+        </div>
+
+        <!-- Article Display (when found) -->
+        <div id="articleDisplay" class="article-display hidden">
+            <div class="article-card-large">
+                <div class="article-header-large">
+                    <div>
+                        <h2 id="articleNameDisplay"></h2>
+                        <div class="article-ean-large" id="articleEanDisplay"></div>
+                    </div>
+                </div>
+                <div class="article-description-large" id="articleDescriptionDisplay"></div>
+                <div class="article-details-large">
+                    <div class="detail-item-large">
+                        <span class="detail-label">Current Quantity</span>
+                        <span class="detail-value-large" id="articleQuantityDisplay">0</span>
+                    </div>
+                    <div class="detail-item-large" id="priceDisplayContainer">
+                        <span class="detail-label">Price</span>
+                        <span class="detail-value-large" id="articlePriceDisplay">-</span>
+                    </div>
+                </div>
+                <div class="quantity-controls">
+                    <button class="btn btn-quantity btn-minus" id="decrementBtn">−</button>
+                    <span class="quantity-change-indicator" id="quantityChange">0</span>
+                    <button class="btn btn-quantity btn-plus" id="incrementBtn">+</button>
+                    <button class="btn btn-primary" id="applyQuantityBtn">Apply</button>
+                </div>
+                <div class="article-actions-large">
+                    <button class="btn btn-edit" id="editArticleBtn">Edit Article</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Article Form (when not found) -->
+        <div id="addArticleForm" class="add-article-form hidden">
+            <div class="form-card">
+                <h2>Article Not Found - Add New Article</h2>
+                <p class="form-subtitle">EAN Code: <strong id="newArticleEan"></strong></p>
+                <form id="articleForm">
+                    <div class="form-group">
+                        <label for="eanCode">EAN Code *</label>
+                        <input type="text" id="eanCode" name="ean_code" required readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="articleName">Name *</label>
+                        <input type="text" id="articleName" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quantity">Initial Quantity *</label>
+                            <input type="number" id="quantity" name="quantity" value="1" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="price">Price</label>
+                            <input type="number" id="price" name="price" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelAddBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Article</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal for Edit Article -->
+        <div id="articleModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Edit Article</h2>
+                    <button class="close-btn" id="closeModal">&times;</button>
+                </div>
+                <form id="editArticleForm">
+                    <div class="form-group">
+                        <label for="editEanCode">EAN Code</label>
+                        <input type="text" id="editEanCode" name="ean_code" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="editArticleName">Name *</label>
+                        <input type="text" id="editArticleName" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDescription">Description</label>
+                        <textarea id="editDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editQuantity">Quantity</label>
+                            <input type="number" id="editQuantity" name="quantity" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPrice">Price</label>
+                            <input type="number" id="editPrice" name="price" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelEditBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content login-modal-content">
+            <div class="modal-header">
+                <h2>🔐 Login Required</h2>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" name="password" required autofocus>
+                </div>
+                <div id="loginError" class="login-error hidden"></div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
