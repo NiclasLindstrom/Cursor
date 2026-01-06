@@ -1,0 +1,53 @@
+# FastAPI Inventory Management - Systemd Service File
+# ===================================================
+# For CentOS/RHEL/Rocky Linux production deployment
+#
+# Installation:
+# 1. Copy this file to /etc/systemd/system/fastapi-inventory.service
+# 2. Update the paths and user in this file
+# 3. sudo systemctl daemon-reload
+# 4. sudo systemctl enable fastapi-inventory
+# 5. sudo systemctl start fastapi-inventory
+
+[Unit]
+Description=FastAPI Inventory Management Application
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/inventory-app
+Environment="PATH=/var/www/inventory-app/venv/bin"
+
+# Load environment variables from .env file
+EnvironmentFile=/var/www/inventory-app/.env
+
+# Gunicorn with uvicorn workers for production
+ExecStart=/var/www/inventory-app/venv/bin/gunicorn \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --timeout 120 \
+    --access-logfile /var/log/fastapi-inventory/access.log \
+    --error-logfile /var/log/fastapi-inventory/error.log \
+    --log-level info \
+    backend.main:app
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fastapi-inventory
+
+[Install]
+WantedBy=multi-user.target
+
