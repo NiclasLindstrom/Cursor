@@ -995,11 +995,11 @@ function startBarcodeScanner() {
         decoder: {
             readers: [
                 "ean_reader",
-                "ean_8_reader",
-                "code_128_reader",
-                "code_39_reader",
-                "upc_reader",
-                "upc_e_reader"
+                "ean_8_reader"
+                //"code_128_reader",
+                //"code_39_reader",
+                //"upc_reader",
+                //"upc_e_reader"
             ],
             debug: {
                 drawBoundingBox: false,
