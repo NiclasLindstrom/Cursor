@@ -129,6 +129,9 @@ let lang = {
 let currentArticle = null;
 let scannerActive = false;
 let quantityChange = 0;
+let lastDetectedCode = null;
+let detectionTimeout = null;
+let onDetectedHandler = null;
 
 // DOM Elements
 const searchForm = document.getElementById('searchForm');
@@ -715,14 +718,21 @@ function startBarcodeScanner() {
                 "code_39_reader",
                 "upc_reader",
                 "upc_e_reader"
-            ]
+            ],
+            debug: {
+                drawBoundingBox: false,
+                showFrequency: false,
+                drawScanline: false,
+                showPattern: false
+            }
         },
         locator: {
             patchSize: "medium",
             halfSample: true
         },
-        numOfWorkers: 0,
-        frequency: 10
+        numOfWorkers: 0, // 0 = no workers (more compatible, works better on some browsers)
+        frequency: 10,
+        locate: true
     }, (err) => {
         if (err) {
             console.error('Quagga initialization error:', err);
@@ -781,19 +791,13 @@ function startBarcodeScanner() {
             console.log('Video metadata loaded, dimensions:', video.videoWidth, 'x', video.videoHeight);
         }, { once: true });
         
+        // Note: Quagga manages its own video stream, so we don't need to manually attach
+        // This manual attachment was causing conflicts. Quagga handles the stream internally.
+        // Only attach if Quagga's stream isn't working (this is a fallback)
         setTimeout(() => {
-            console.log('Manually attaching video stream for better compatibility...');
-            navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: 640,
-                    height: 480,
-                    facingMode: "environment"
-                }
-            }).then(stream => {
-                video.srcObject = stream;
-                return video.play();
-            }).then(() => {
-                console.log('Video stream attached and playing successfully');
+            // Check if video is already playing (Quagga's stream)
+            if (video.readyState >= 2) { // HAVE_CURRENT_DATA or better
+                console.log('Video stream already active from Quagga');
                 videoLoaded = true;
                 if (errorTimeout) {
                     clearTimeout(errorTimeout);
@@ -801,26 +805,127 @@ function startBarcodeScanner() {
                 if (cameraError) {
                     cameraError.classList.add('hidden');
                 }
-            }).catch(e => {
-                console.error('Error manually attaching video stream:', e);
-            });
-        }, 300);
+            } else {
+                // Fallback: only manually attach if Quagga didn't set up the stream
+                console.log('Quagga stream not active, using fallback...');
+                navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                }).then(stream => {
+                    // Only use fallback if Quagga hasn't attached a stream
+                    if (!video.srcObject) {
+                        video.srcObject = stream;
+                        return video.play();
+                    } else {
+                        // Quagga already has the stream, stop the fallback
+                        stream.getTracks().forEach(track => track.stop());
+                        return Promise.resolve();
+                    }
+                }).then(() => {
+                    console.log('Video stream ready');
+                    videoLoaded = true;
+                    if (errorTimeout) {
+                        clearTimeout(errorTimeout);
+                    }
+                    if (cameraError) {
+                        cameraError.classList.add('hidden');
+                    }
+                }).catch(e => {
+                    console.error('Error with video stream fallback:', e);
+                    // Don't fail completely, Quagga might still work
+                });
+            }
+        }, 500); // Increased delay to let Quagga initialize first
         
         Quagga.start();
         
-        Quagga.onDetected((result) => {
-            const code = result.codeResult.code;
-            if (code && code.length >= 8 && code.length <= 13) {
-                console.log('Barcode detected:', code);
-                handleBarcodeScanned(code);
+        // Remove any existing handler first to prevent duplicates
+        if (onDetectedHandler) {
+            Quagga.offDetected(onDetectedHandler);
+        }
+        
+        // Create handler with debouncing to prevent multiple rapid detections
+        onDetectedHandler = (result) => {
+            if (!result || !result.codeResult || !result.codeResult.code) {
+                console.warn('Invalid barcode detection result:', result);
+                return;
             }
-        });
+            
+            const code = result.codeResult.code.trim();
+            
+            // Validate code format (EAN codes are typically 8-13 digits)
+            if (!code || code.length < 8 || code.length > 13) {
+                console.log('Invalid barcode length:', code);
+                return;
+            }
+            
+            // Validate that code contains only digits (EAN codes are numeric)
+            if (!/^\d+$/.test(code)) {
+                console.log('Invalid barcode format (non-numeric):', code);
+                return;
+            }
+            
+            // Debounce: ignore if same code detected within 1 second
+            if (lastDetectedCode === code && detectionTimeout) {
+                console.log('Duplicate detection ignored:', code);
+                return; // Ignore duplicate detection
+            }
+            
+            // Clear any pending timeout
+            if (detectionTimeout) {
+                clearTimeout(detectionTimeout);
+            }
+            
+            // Store the detected code
+            lastDetectedCode = code;
+            
+            console.log('Valid barcode detected, confirming...', code);
+            
+            // Add a small delay to ensure we got a stable read
+            // This prevents processing rapid multiple detections of the same code
+            detectionTimeout = setTimeout(() => {
+                // Verify code hasn't changed
+                if (lastDetectedCode === code) {
+                    console.log('Barcode confirmed and processing:', code);
+                    handleBarcodeScanned(code);
+                }
+                // Reset after handling
+                lastDetectedCode = null;
+                detectionTimeout = null;
+            }, 400); // 400ms debounce delay for stability
+        };
+        
+        // Register the handler
+        Quagga.onDetected(onDetectedHandler);
     });
 }
 
 function stopBarcodeScanner() {
     scannerActive = false;
     
+    // Clear debounce timeout
+    if (detectionTimeout) {
+        clearTimeout(detectionTimeout);
+        detectionTimeout = null;
+    }
+    
+    // Reset detection tracking
+    lastDetectedCode = null;
+    
+    // Remove detection handler
+    if (typeof Quagga !== 'undefined' && Quagga && onDetectedHandler) {
+        try {
+            Quagga.offDetected(onDetectedHandler);
+            onDetectedHandler = null;
+        } catch (e) {
+            console.log('Error removing Quagga handler:', e);
+        }
+    }
+    
+    // Stop Quagga
     if (typeof Quagga !== 'undefined' && Quagga) {
         try {
             Quagga.stop();
@@ -829,6 +934,7 @@ function stopBarcodeScanner() {
         }
     }
     
+    // Stop video stream
     if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => {
             track.stop();
