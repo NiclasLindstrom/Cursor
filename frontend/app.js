@@ -1138,8 +1138,8 @@ function startBarcodeScanner() {
             
             const code = result.codeResult.code.trim();
             
-            // Validate code format (EAN codes are typically 8-13 digits)
-            if (!code || code.length < 8 || code.length > 13) {
+            // Validate code format (EAN codes are typically 10-13 digits)
+            if (!code || code.length < 10 || code.length > 13) {
                 console.log('Invalid barcode length:', code);
                 return;
             }
