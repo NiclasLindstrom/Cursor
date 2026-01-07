@@ -4,11 +4,28 @@
     box-sizing: border-box;
 }
 
+html {
+    width: 100%;
+    overflow-x: hidden;
+    /* Prevent horizontal scroll on iOS */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: #f5f5f5;
     min-height: 100vh;
+    min-height: -webkit-fill-available; /* iOS Safari fix */
     color: #333;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    /* Prevent text selection zoom on iOS */
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent font size adjustment on iOS */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 /* Toolbar */
@@ -76,8 +93,11 @@ body {
 
 .container {
     width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
     background: white;
     min-height: calc(100vh - 70px);
+    min-height: calc(100vh - 70px - env(safe-area-inset-bottom)); /* iOS safe area */
 }
 
 .search-section {
@@ -94,11 +114,17 @@ body {
 
 #searchInput {
     flex: 1;
+    min-width: 0; /* Allow flexbox to shrink */
     padding: 15px 20px;
     font-size: 16px;
     border: 2px solid #e0e0e0;
     border-radius: 8px;
     transition: border-color 0.3s;
+    /* Prevent iOS zoom on input focus */
+    font-size: 16px; /* iOS won't zoom if font-size >= 16px */
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 #searchInput:focus {
@@ -137,6 +163,8 @@ body {
     max-width: 500px;
     min-height: 250px;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 #video {
@@ -473,12 +501,17 @@ input[type="text"],
 input[type="number"],
 textarea {
     width: 100%;
+    max-width: 100%;
     padding: 12px;
     border: 2px solid #e0e0e0;
     border-radius: 8px;
-    font-size: 16px;
+    font-size: 16px; /* Prevent iOS zoom on focus */
     font-family: inherit;
     transition: border-color 0.3s;
+    box-sizing: border-box;
+    /* Prevent iOS input styling */
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 input:focus,
@@ -699,13 +732,26 @@ textarea {
     display: none;
 }
 
+/* iOS and Mobile Specific Fixes */
 @media (max-width: 768px) {
+    /* Prevent horizontal scroll on mobile */
+    html, body {
+        position: relative;
+        overflow-x: hidden;
+        width: 100%;
+        max-width: 100vw;
+    }
+    
+    /* iOS safe area support for toolbar */
     .toolbar {
         padding: 12px 15px;
+        padding-top: max(12px, env(safe-area-inset-top));
     }
     
     .toolbar-left h1 {
         font-size: 1.2em;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
     
     .toolbar-btn {
@@ -717,12 +763,17 @@ textarea {
     
     .search-section {
         padding: 15px;
+        padding-left: max(15px, env(safe-area-inset-left));
+        padding-right: max(15px, env(safe-area-inset-right));
     }
     
     .result-area,
     .article-display,
     .add-article-form {
         padding: 15px;
+        padding-left: max(15px, env(safe-area-inset-left));
+        padding-right: max(15px, env(safe-area-inset-right));
+        padding-bottom: max(15px, env(safe-area-inset-bottom));
     }
 
     .form-row {
@@ -744,19 +795,32 @@ textarea {
 
     .search-container {
         flex-wrap: wrap;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    #searchInput {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0; /* Allow flex shrink */
     }
 
     .search-container button {
         flex: 1;
         min-width: 100px;
+        max-width: 100%;
     }
 
     .article-card-large {
         padding: 20px;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     .article-header-large h2 {
         font-size: 1.5em;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
     .article-details-large {
@@ -767,6 +831,8 @@ textarea {
     .quantity-controls {
         flex-wrap: wrap;
         gap: 15px;
+        width: 100%;
+        max-width: 100%;
     }
 
     .btn-quantity {
@@ -778,6 +844,54 @@ textarea {
     .quantity-change-indicator {
         font-size: 1.5em;
         min-width: 60px;
+    }
+    
+    /* Modal fixes for mobile */
+    .modal-content {
+        width: 95%;
+        max-width: 95vw;
+        margin: 10px;
+    }
+    
+    /* Form inputs should not exceed viewport */
+    input[type="text"],
+    input[type="number"],
+    textarea {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* Video container for barcode scanner */
+    .video-wrapper {
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    #video {
+        max-width: 100%;
+        width: 100%;
+    }
+}
+
+/* Extra small devices (iPhone SE, etc.) */
+@media (max-width: 375px) {
+    .toolbar-left h1 {
+        font-size: 1em;
+    }
+    
+    .search-section {
+        padding: 10px;
+    }
+    
+    .result-area,
+    .article-display,
+    .add-article-form {
+        padding: 10px;
+    }
+    
+    .article-header-large h2 {
+        font-size: 1.3em;
     }
 }
 

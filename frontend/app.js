@@ -22,17 +22,65 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
 // =====================
 
 /**
- * Get JWT token from localStorage
- * Returns null if not authenticated
+ * Get JWT token from cookie (or localStorage as fallback)
+ * Returns null if not found
  */
 function getToken() {
-    return localStorage.getItem('jwt_token');
+    // Try cookie first
+    const name = 'jwt_token=';
+    const decodedCookie = decodeURIComponent(document.cookie);
+    const ca = decodedCookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') {
+            c = c.substring(1);
+        }
+        if (c.indexOf(name) === 0) {
+            const token = c.substring(name.length, c.length);
+            if (token) {
+                console.log('Token found in cookie');
+                return token;
+            }
+        }
+    }
+    
+    // Fallback to localStorage (for migration)
+    const localToken = localStorage.getItem('jwt_token');
+    if (localToken) {
+        console.log('Token found in localStorage, migrating to cookie...');
+        setToken(localToken); // Migrate to cookie
+        return localToken;
+    }
+    
+    console.log('No token found');
+    return null;
 }
 
 /**
- * Save JWT token to localStorage
+ * Save JWT token to cookie
+ * Cookie expires when JWT expires (24 hours by default)
  */
 function setToken(token) {
+    if (!token) {
+        console.error('Attempted to set empty token');
+        return;
+    }
+    
+    // JWT tokens are typically valid for 24 hours
+    // Set cookie to expire in 25 hours to match token expiration
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (25 * 60 * 60 * 1000)); // 25 hours
+    
+    // Secure: true in production (HTTPS), SameSite for CSRF protection
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    
+    // Set cookie - use path=/ to make it available site-wide
+    const cookieString = `jwt_token=${token}; expires=${expires.toUTCString()}; path=/; SameSite=Lax${secure}`;
+    document.cookie = cookieString;
+    
+    console.log('Token saved to cookie:', cookieString.substring(0, 50) + '...');
+    
+    // Also keep in localStorage as backup for compatibility
     localStorage.setItem('jwt_token', token);
 }
 
@@ -40,14 +88,139 @@ function setToken(token) {
  * Remove JWT token (logout)
  */
 function clearToken() {
+    // Remove from cookie
+    document.cookie = 'jwt_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    
+    // Remove from localStorage
     localStorage.removeItem('jwt_token');
 }
 
 /**
- * Check if user is authenticated
+ * Check if token exists
  */
-function isAuthenticated() {
+function hasToken() {
     return getToken() !== null;
+}
+
+/**
+ * Decode JWT token (without verification - just to check expiration)
+ * Returns decoded payload or null if invalid
+ */
+function decodeToken(token) {
+    if (!token || typeof token !== 'string') {
+        console.error('Invalid token format:', typeof token);
+        return null;
+    }
+    
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            console.error('Invalid JWT format: expected 3 parts, got', parts.length);
+            return null;
+        }
+        
+        const base64Url = parts[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const decoded = JSON.parse(jsonPayload);
+        console.log('Token decoded successfully, expires:', new Date(decoded.exp * 1000).toISOString());
+        return decoded;
+    } catch (e) {
+        console.error('Error decoding token:', e);
+        return null;
+    }
+}
+
+/**
+ * Check if token is expired (client-side check)
+ */
+function isTokenExpired(token) {
+    if (!token) {
+        return true;
+    }
+    
+    const decoded = decodeToken(token);
+    if (!decoded || !decoded.exp) {
+        console.log('Token invalid or missing expiration');
+        return true; // Invalid token or no expiration
+    }
+    
+    const expirationTime = decoded.exp * 1000; // Convert to milliseconds
+    const currentTime = Date.now();
+    const timeUntilExpiry = expirationTime - currentTime;
+    
+    console.log('Token expires in:', Math.floor(timeUntilExpiry / 1000 / 60), 'minutes');
+    
+    // Check if token expires in the next 60 seconds (refresh margin)
+    const expired = currentTime >= (expirationTime - 60000);
+    if (expired) {
+        console.log('Token is expired or expiring soon');
+    }
+    return expired;
+}
+
+/**
+ * Validate token by checking expiration and optionally testing with server
+ * Returns true if token is valid, false otherwise
+ */
+async function validateToken() {
+    console.log('Validating token...');
+    const token = getToken();
+    if (!token) {
+        console.log('No token found for validation');
+        return false;
+    }
+    
+    console.log('Token found, checking expiration...');
+    
+    // First, check expiration client-side (faster)
+    if (isTokenExpired(token)) {
+        console.log('Token expired (client-side check), clearing...');
+        clearToken();
+        return false;
+    }
+    
+    console.log('Token not expired, validating with server...');
+    
+    // Token appears valid client-side, verify with server (lightweight check)
+    try {
+        // Use a lightweight protected endpoint to verify token is still valid
+        // Using /api/articles with empty search - fast and protected
+        const url = `${API_BASE_URL}/articles?search=`;
+        console.log('Validating token with:', url);
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('Validation response status:', response.status);
+        
+        if (response.status === 401) {
+            // Token is invalid or expired on server side
+            console.log('Token invalid on server (401), clearing...');
+            clearToken();
+            return false;
+        }
+        
+        // Any other response (200, 404, etc.) means token is valid
+        console.log('Token validated successfully!');
+        return true;
+    } catch (error) {
+        console.error('Token validation error:', error);
+        console.log('Network error during validation, trusting client-side check...');
+        // On network error, trust client-side expiration check
+        // Don't log out user on network issues if token isn't expired
+        const stillValid = !isTokenExpired(token);
+        console.log('Token considered valid based on expiration check:', stillValid);
+        return stillValid;
+    }
 }
 
 /**
@@ -71,7 +244,15 @@ async function fetchWithAuth(url, options = {}) {
     // Handle 401 Unauthorized - token expired or invalid
     if (response.status === 401) {
         clearToken();
-        showLoginModal();
+        // Always call showLoginModal() on 401 to reset form state
+        // (clears password, hides errors, focuses input)
+        // The function is idempotent - safe to call even if modal is already visible
+        if (loginModal) {
+            showLoginModal();
+        } else {
+            // Modal doesn't exist yet, wait for DOM
+            setTimeout(() => showLoginModal(), 100);
+        }
         throw new Error('Authentication required');
     }
     
@@ -132,6 +313,7 @@ let quantityChange = 0;
 let lastDetectedCode = null;
 let detectionTimeout = null;
 let onDetectedHandler = null;
+let eventListenersSetup = false; // Track if event listeners have been set up
 
 // DOM Elements
 const searchForm = document.getElementById('searchForm');
@@ -186,15 +368,82 @@ const editPriceInput = document.getElementById('editPrice');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
 const closeModal = document.getElementById('closeModal');
 
-// Initialize
-document.addEventListener('DOMContentLoaded', async () => {
-    // Check authentication
-    if (!isAuthenticated()) {
-        showLoginModal();
-        return;
+// iOS Viewport Fix
+// ================
+// Fixes viewport scaling issues on iOS devices
+function fixIOSViewport() {
+    // Prevent iOS from zooming on input focus
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+        const content = viewport.getAttribute('content');
+        // Ensure viewport settings are correct
+        if (!content.includes('user-scalable=no')) {
+            viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+        }
     }
     
-    await initializeApp();
+    // Fix viewport height on iOS Safari
+    function setViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 100);
+    });
+    
+    // Prevent double-tap zoom on iOS
+    // Only prevent if double-tap is on the same element within 300ms
+    let lastTouchEnd = { time: 0, target: null };
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        const sameTarget = e.target === lastTouchEnd.target;
+        const withinTimeWindow = now - lastTouchEnd.time <= 300;
+        
+        // Only prevent if it's a double-tap on the SAME element
+        // This allows normal interactions like tapping different elements quickly
+        if (sameTarget && withinTimeWindow) {
+            e.preventDefault();
+        }
+        
+        lastTouchEnd = { time: now, target: e.target };
+    }, false);
+    
+    // Prevent horizontal scroll
+    document.body.style.overflowX = 'hidden';
+    document.documentElement.style.overflowX = 'hidden';
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Page loaded, initializing...');
+    
+    // Fix iOS viewport issues first
+    fixIOSViewport();
+    
+    // Check authentication and validate token
+    try {
+        const hasValidToken = await validateToken();
+        console.log('Token validation result:', hasValidToken);
+        
+        if (!hasValidToken) {
+            // No valid token, show login
+            console.log('No valid token, showing login modal');
+            showLoginModal();
+            return;
+        }
+        
+        // Token is valid, hide login modal and initialize app
+        console.log('Token valid, hiding login modal and initializing app...');
+        hideLoginModal();
+        await initializeApp();
+    } catch (error) {
+        console.error('Error during initialization:', error);
+        // On error, show login to be safe
+        showLoginModal();
+    }
 });
 
 /**
@@ -371,31 +620,64 @@ async function checkApiConnection() {
 }
 
 function setupEventListeners() {
-    searchForm.addEventListener('submit', handleSearchSubmit);
-    scanBtn.addEventListener('click', toggleBarcodeScanner);
-    stopScanBtn.addEventListener('click', stopBarcodeScanner);
-    incrementBtn.addEventListener('click', () => adjustQuantity(1));
-    decrementBtn.addEventListener('click', () => adjustQuantity(-1));
-    applyQuantityBtn.addEventListener('click', applyQuantityChange);
-    editArticleBtn.addEventListener('click', openEditModal);
-    articleForm.addEventListener('submit', handleAddArticleSubmit);
-    cancelAddBtn.addEventListener('click', resetView);
-    editArticleForm.addEventListener('submit', handleEditArticleSubmit);
-    cancelEditBtn.addEventListener('click', closeEditModal);
-    closeModal.addEventListener('click', closeEditModal);
+    // Prevent duplicate event listeners
+    // If already setup, skip (event listeners persist across logout/login)
+    if (eventListenersSetup) {
+        console.log('Event listeners already set up, skipping...');
+        return;
+    }
+    
+    // Store references to handlers so we can remove them if needed
+    const handlers = {
+        searchSubmit: handleSearchSubmit,
+        scanClick: toggleBarcodeScanner,
+        stopScanClick: stopBarcodeScanner,
+        incrementClick: () => adjustQuantity(1),
+        decrementClick: () => adjustQuantity(-1),
+        applyQuantityClick: applyQuantityChange,
+        editArticleClick: openEditModal,
+        addArticleSubmit: handleAddArticleSubmit,
+        cancelAddClick: resetView,
+        editArticleSubmit: handleEditArticleSubmit,
+        cancelEditClick: closeEditModal,
+        closeModalClick: closeEditModal,
+        exportClick: exportToCSV,
+        logoutClick: handleLogout,
+        modalClick: (e) => {
+            if (e.target === articleModal) {
+                closeEditModal();
+            }
+        }
+    };
+    
+    // Add event listeners
+    searchForm.addEventListener('submit', handlers.searchSubmit);
+    scanBtn.addEventListener('click', handlers.scanClick);
+    stopScanBtn.addEventListener('click', handlers.stopScanClick);
+    incrementBtn.addEventListener('click', handlers.incrementClick);
+    decrementBtn.addEventListener('click', handlers.decrementClick);
+    applyQuantityBtn.addEventListener('click', handlers.applyQuantityClick);
+    editArticleBtn.addEventListener('click', handlers.editArticleClick);
+    articleForm.addEventListener('submit', handlers.addArticleSubmit);
+    cancelAddBtn.addEventListener('click', handlers.cancelAddClick);
+    editArticleForm.addEventListener('submit', handlers.editArticleSubmit);
+    cancelEditBtn.addEventListener('click', handlers.cancelEditClick);
+    closeModal.addEventListener('click', handlers.closeModalClick);
     
     if (exportBtn) {
-        exportBtn.addEventListener('click', exportToCSV);
+        exportBtn.addEventListener('click', handlers.exportClick);
     }
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
+        logoutBtn.addEventListener('click', handlers.logoutClick);
     }
     
-    articleModal.addEventListener('click', (e) => {
-        if (e.target === articleModal) {
-            closeEditModal();
-        }
-    });
+    articleModal.addEventListener('click', handlers.modalClick);
+    
+    // Store handlers for potential cleanup (if needed in future)
+    window._eventHandlers = handlers;
+    
+    eventListenersSetup = true;
+    console.log('Event listeners set up');
 }
 
 // Handle search form submission
@@ -1021,5 +1303,5 @@ async function handleLogout() {
 
 // Log API URL for debugging
 console.log('API Base URL:', API_BASE_URL);
-console.log('JWT Token present:', isAuthenticated());
+console.log('JWT Token present:', hasToken());
 
