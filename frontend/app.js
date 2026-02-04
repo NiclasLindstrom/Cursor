@@ -717,7 +717,10 @@ async function lookupArticle(eanCode) {
 
 // Display existing article
 function displayArticle(article) {
-    currentArticle = article;
+    currentArticle = {
+        ...article,
+        quantity: Number(article.quantity ?? 0)
+    };
     quantityChange = 0;
     
     addArticleForm.classList.add('hidden');
@@ -734,7 +737,7 @@ function displayArticle(article) {
         articleDescriptionDisplay.style.display = 'none';
     }
     
-    articleQuantityDisplay.textContent = article.quantity || 0;
+    articleQuantityDisplay.textContent = currentArticle.quantity;
     
     if (article.price) {
         const priceValue = parseFloat(article.price).toFixed(2);
@@ -807,8 +810,13 @@ function updateQuantityChangeIndicator() {
 // Apply quantity change
 async function applyQuantityChange() {
     if (!currentArticle || quantityChange === 0) return;
-    
-    const newQuantity = (currentArticle.quantity || 0) + quantityChange;
+    const currentQty = Number(currentArticle.quantity ?? 0);
+    const newQuantity = currentQty + quantityChange;
+
+    if (!Number.isFinite(newQuantity)) {
+        showError('Invalid quantity value');
+        return;
+    }
     
     if (newQuantity < 0) {
         showError(lang.quantityCannotBeNegative);
@@ -965,6 +973,19 @@ function toggleBarcodeScanner() {
 function startBarcodeScanner() {
     if (typeof Quagga === 'undefined') {
         showError(lang.barcodeScannerNotLoaded);
+        return;
+    }
+
+    // Ensure getUserMedia is available for Quagga (some browsers only expose mediaDevices)
+    if (!navigator.getUserMedia && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.getUserMedia = (constraints, success, error) => {
+            navigator.mediaDevices.getUserMedia(constraints).then(success).catch(error);
+        };
+    }
+
+    // Guard: camera access requires a secure context (HTTPS or localhost)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showError('Camera error: getUserMedia is not available (HTTPS or localhost required)');
         return;
     }
     
