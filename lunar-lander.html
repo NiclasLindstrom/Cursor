@@ -55,6 +55,7 @@
   }
   .bigmsg { font-size: clamp(22px, 5vw, 36px); letter-spacing: 0.2em; margin-bottom: 10px; }
   .bigmsg.good { color: var(--hud-green); }
+  .bigmsg.warn { color: var(--hud-amber); }
   .bigmsg.bad  { color: var(--hud-red); }
   .detail { font-size: clamp(12px, 2.6vw, 15px); color: #aebdcb; line-height: 1.9; margin-bottom: 18px; }
   .detail b { color: #ffffff; }
@@ -136,7 +137,8 @@
     </div>
     <div class="detail">
       Land on a flat <b>pad</b> with descent &lt; <b>12 m/s</b>, drift &lt; <b>8 m/s</b>,
-      and the ship nearly upright. Narrow pads score more. Fuel left = bonus.
+      and the ship nearly upright. The suspension forgives a slightly rougher
+      touchdown &mdash; at half score. Narrow pads score more. Fuel left = bonus.
     </div>
     <button class="btn" id="btn-start">LAUNCH</button>
   </div>
@@ -162,9 +164,14 @@ const THRUST_ACC = 34;             // m/s^2 at full burn
 const ROT_SPEED = 2.4;             // rad/s
 const FUEL_MAX = 100;
 const FUEL_BURN = 7.5;             // units/s at full burn
-const SAFE_VY = 12;                // max descent speed m/s
-const SAFE_VX = 8;                 // max horizontal speed m/s
-const SAFE_TILT = 0.25;            // rad from vertical
+const SAFE_VY = 12;                // max descent speed m/s for a clean landing
+const SAFE_VX = 8;                 // max horizontal speed m/s for a clean landing
+const SAFE_TILT = 0.25;            // rad from vertical for a clean landing
+// the landing gear suspension absorbs a bit beyond the clean limits:
+// the ship survives, but it counts as a hard landing (reduced score)
+const HARD_VY = 18;
+const HARD_VX = 11;
+const HARD_TILT = 0.40;
 const LANDER_R = 14;               // collision radius, metres
 
 const COL = {
@@ -557,13 +564,21 @@ function updatePlaying(dt) {
   // ceiling: gently push back
   if (lander.y > WORLD_H) { lander.y = WORLD_H; lander.vy = Math.min(lander.vy, 0); }
 
-  // ground contact — sample under both legs
-  const legSpread = LANDER_R * 0.85;
-  const lx = lander.x - Math.cos(lander.angle) * legSpread;
-  const rx = lander.x + Math.cos(lander.angle) * legSpread;
+  // ground contact — sample under both legs.
+  // Over a pad, use the pad's flat surface: terrain right outside a pad edge
+  // is usually higher (pads are carved at the lowest point of their span),
+  // and an overhanging leg shouldn't catch on that rim.
   const bottomY = lander.y - LANDER_R;
-  const gl = surfaceAt(lx), gr = surfaceAt(rx), gc = surfaceAt(lander.x);
-  const ground = Math.max(gl, gr, gc);
+  const pad = padUnder(lander.x);
+  let ground;
+  if (pad) {
+    ground = pad.y;
+  } else {
+    const legSpread = LANDER_R * 0.85;
+    const lx = lander.x - Math.cos(lander.angle) * legSpread;
+    const rx = lander.x + Math.cos(lander.angle) * legSpread;
+    ground = Math.max(surfaceAt(lx), surfaceAt(rx), surfaceAt(lander.x));
+  }
 
   if (bottomY <= ground) {
     resolveContact(ground);
@@ -572,25 +587,41 @@ function updatePlaying(dt) {
 
 function resolveContact(groundY) {
   const pad = padUnder(lander.x);
-  const fullyOnPad = pad && (lander.x - LANDER_R * 0.8) >= pad.x1 && (lander.x + LANDER_R * 0.8) <= pad.x2;
+  // legs may overhang the pad edge slightly — the footpads still catch
+  const onPad = pad && (lander.x - LANDER_R * 0.55) >= pad.x1 && (lander.x + LANDER_R * 0.55) <= pad.x2;
+
   // y axis points up, so descending means vy < 0
-  const descentOK = (-lander.vy) <= SAFE_VY;
-  const driftOK = Math.abs(lander.vx) <= SAFE_VX;
-  const tiltOK = Math.abs(lander.angle) <= SAFE_TILT;
+  const vy = -lander.vy, vx = Math.abs(lander.vx), tilt = Math.abs(lander.angle);
+  const clean = vy <= SAFE_VY && vx <= SAFE_VX && tilt <= SAFE_TILT;
+  const survivable = vy <= HARD_VY && vx <= HARD_VX && tilt <= HARD_TILT;
 
   lander.y = groundY + LANDER_R;
 
-  if (fullyOnPad && descentOK && driftOK && tiltOK) {
-    // touchdown!
-    const speedBonus = Math.round(clamp(SAFE_VY - (-lander.vy), 0, SAFE_VY) * 8);
+  if (onPad && survivable) {
+    // touchdown! (hard = the suspension soaked up the excess)
+    const hard = !clean;
+    const speedBonus = hard ? 0 : Math.round(clamp(SAFE_VY - vy, 0, SAFE_VY) * 8);
     const fuelBonus = Math.round(lander.fuel * 5);
-    const base = 100 * pad.mult;
+    const base = hard ? Math.round(100 * pad.mult / 2) : 100 * pad.mult;
     const gained = base + speedBonus + fuelBonus;
     game.score += gained;
     game.lastLandingInfo = {
-      pad, gained, base, speedBonus, fuelBonus,
-      vy: -lander.vy, vx: lander.vx,
+      pad, gained, base, speedBonus, fuelBonus, hard,
+      vy, vx: lander.vx,
     };
+    if (hard) {
+      // kick up dust and rattle the camera so the impact reads as heavy
+      game.shake = 0.35;
+      Sound.beep(90, 0.25, "square", 0.2);
+      spawnParticles(lander.x, lander.y - LANDER_R, 0, 0, 30, {
+        aMin: Math.PI * 0.05, aMax: Math.PI * 0.95,
+        spMin: 15, spMax: 70,
+        lifeMin: 0.3, lifeMax: 1.0,
+        sizeMin: 1.5, sizeMax: 3.5,
+        colors: [COL.terrainEdge, COL.hudDim],
+        grav: GRAVITY * 0.8,
+      });
+    }
     lander.vx = 0; lander.vy = 0; lander.angle = 0;
     lander.landed = true;
     lander.thrusting = false;
@@ -895,18 +926,27 @@ function hide(el) { el.classList.add("hidden"); }
 function showResult(success) {
   if (success) {
     const i = game.lastLandingInfo;
-    resultTitle.textContent = "TOUCHDOWN";
-    resultTitle.className = "bigmsg good";
-    resultDetail.innerHTML =
-      `Pad x${i.pad.mult} &nbsp;&middot;&nbsp; descent ${fmt(i.vy, 1)} m/s &nbsp;&middot;&nbsp; drift ${fmt(Math.abs(i.vx), 1)} m/s<br>` +
-      `base <b>${i.base}</b> + soft-landing <b>${i.speedBonus}</b> + fuel <b>${i.fuelBonus}</b><br>` +
-      `= <b>+${i.gained} pts</b>`;
+    const stats =
+      `Pad x${i.pad.mult} &nbsp;&middot;&nbsp; descent ${fmt(i.vy, 1)} m/s &nbsp;&middot;&nbsp; drift ${fmt(Math.abs(i.vx), 1)} m/s<br>`;
+    if (i.hard) {
+      resultTitle.textContent = "HARD LANDING";
+      resultTitle.className = "bigmsg warn";
+      resultDetail.innerHTML = stats +
+        `The suspension absorbed the impact &mdash; barely.<br>` +
+        `base <b>${i.base}</b> (halved) + fuel <b>${i.fuelBonus}</b> = <b>+${i.gained} pts</b>`;
+    } else {
+      resultTitle.textContent = "TOUCHDOWN";
+      resultTitle.className = "bigmsg good";
+      resultDetail.innerHTML = stats +
+        `base <b>${i.base}</b> + soft-landing <b>${i.speedBonus}</b> + fuel <b>${i.fuelBonus}</b><br>` +
+        `= <b>+${i.gained} pts</b>`;
+    }
     document.getElementById("btn-again").textContent = "NEXT MISSION";
   } else {
     const reasons = [];
-    if (-lander.vy > SAFE_VY) reasons.push(`descent ${fmt(-lander.vy, 1)} m/s (max ${SAFE_VY})`);
-    if (Math.abs(lander.vx) > SAFE_VX) reasons.push(`drift ${fmt(Math.abs(lander.vx), 1)} m/s (max ${SAFE_VX})`);
-    if (Math.abs(lander.angle) > SAFE_TILT) reasons.push(`tilt ${fmt(Math.abs(lander.angle) * 57.3)}\u00B0`);
+    if (-lander.vy > HARD_VY) reasons.push(`descent ${fmt(-lander.vy, 1)} m/s (survivable up to ${HARD_VY})`);
+    if (Math.abs(lander.vx) > HARD_VX) reasons.push(`drift ${fmt(Math.abs(lander.vx), 1)} m/s (survivable up to ${HARD_VX})`);
+    if (Math.abs(lander.angle) > HARD_TILT) reasons.push(`tilt ${fmt(Math.abs(lander.angle) * 57.3)}\u00B0 (survivable up to ${fmt(HARD_TILT * 57.3)}\u00B0)`);
     if (!padUnder(lander.x)) reasons.push("not on a pad");
     resultTitle.textContent = "CRASHED";
     resultTitle.className = "bigmsg bad";
