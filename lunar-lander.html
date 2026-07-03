@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lunar Lander</title>
+<style>
+  :root {
+    --hud-green:  #7dff8a;
+    --hud-amber:  #ffd166;
+    --hud-red:    #ff5d5d;
+    --hud-cyan:   #7de8ff;
+    --hud-dim:    #6a7a8a;
+    --panel-bg:   rgba(6, 12, 20, 0.82);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #05070c;
+    font-family: "Courier New", Courier, monospace;
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  #game { display: block; width: 100%; height: 100%; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    color: #dfe9f2;
+    pointer-events: none;
+  }
+  .overlay.hidden { display: none; }
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid #23394d;
+    border-radius: 10px;
+    padding: 28px 40px;
+    max-width: min(560px, 88vw);
+    pointer-events: auto;
+  }
+  .title {
+    font-size: clamp(26px, 6vw, 44px);
+    letter-spacing: 0.28em;
+    color: var(--hud-cyan);
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: clamp(11px, 2.4vw, 14px);
+    color: var(--hud-dim);
+    letter-spacing: 0.14em;
+    margin-bottom: 20px;
+  }
+  .bigmsg { font-size: clamp(22px, 5vw, 36px); letter-spacing: 0.2em; margin-bottom: 10px; }
+  .bigmsg.good { color: var(--hud-green); }
+  .bigmsg.bad  { color: var(--hud-red); }
+  .detail { font-size: clamp(12px, 2.6vw, 15px); color: #aebdcb; line-height: 1.9; margin-bottom: 18px; }
+  .detail b { color: #ffffff; }
+  .keys {
+    display: inline-block; text-align: left;
+    font-size: clamp(11px, 2.4vw, 14px);
+    color: #aebdcb; line-height: 2.0;
+    margin-bottom: 20px;
+  }
+  .keys kbd {
+    display: inline-block; min-width: 26px; text-align: center;
+    border: 1px solid #3a5065; border-bottom-width: 3px; border-radius: 5px;
+    padding: 1px 7px; margin-right: 6px;
+    color: #ffffff; background: #16222e;
+    font-family: inherit; font-size: 0.92em;
+  }
+  .btn {
+    display: inline-block;
+    font-family: inherit;
+    font-size: clamp(13px, 3vw, 16px);
+    letter-spacing: 0.18em;
+    color: #05070c;
+    background: var(--hud-cyan);
+    border: none; border-radius: 7px;
+    padding: 12px 34px;
+    cursor: pointer;
+  }
+  .btn:active { background: #5ec8e0; }
+  .blink { animation: blink 1.1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  /* touch controls */
+  #touch {
+    position: absolute; inset: 0;
+    display: none;
+    pointer-events: none;
+  }
+  body.touch-on #touch { display: block; }
+  .tbtn {
+    position: absolute;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 74px; height: 74px;
+    border-radius: 50%;
+    border: 2px solid #3a5065;
+    background: rgba(15, 26, 38, 0.6);
+    color: var(--hud-cyan);
+    font-size: 30px;
+    line-height: 70px;
+    text-align: center;
+    pointer-events: auto;
+  }
+  .tbtn.pressed { background: rgba(60, 110, 150, 0.75); border-color: var(--hud-cyan); }
+  #t-left  { left: 20px; }
+  #t-right { left: 112px; }
+  #t-thrust {
+    right: 20px;
+    width: 96px; height: 96px; line-height: 92px;
+    font-size: 22px;
+    color: var(--hud-amber);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="touch">
+  <div class="tbtn" id="t-left">&#8634;</div>
+  <div class="tbtn" id="t-right">&#8635;</div>
+  <div class="tbtn" id="t-thrust">BURN</div>
+</div>
+
+<div class="overlay" id="menu">
+  <div class="panel">
+    <div class="title">LUNAR LANDER</div>
+    <div class="subtitle">MISSION: TOUCH DOWN GENTLY ON A PAD</div>
+    <div class="keys">
+      <div><kbd>&#8592;</kbd><kbd>&#8594;</kbd> rotate &nbsp;&nbsp; <kbd>&#8593;</kbd> / <kbd>SPACE</kbd> main engine</div>
+      <div><kbd>P</kbd> pause &nbsp;&nbsp; <kbd>R</kbd> retry &nbsp;&nbsp; <kbd>M</kbd> sound on/off</div>
+    </div>
+    <div class="detail">
+      Land on a flat <b>pad</b> with descent &lt; <b>12 m/s</b>, drift &lt; <b>8 m/s</b>,
+      and the ship nearly upright. Narrow pads score more. Fuel left = bonus.
+    </div>
+    <button class="btn" id="btn-start">LAUNCH</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="result">
+  <div class="panel">
+    <div class="bigmsg" id="result-title"></div>
+    <div class="detail" id="result-detail"></div>
+    <button class="btn" id="btn-again">CONTINUE</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ================= constants ================= */
+
+const WORLD_W = 3200;              // metres (1 unit = 1 m)
+const WORLD_H = 1800;
+const GRAVITY = 12;                // m/s^2 (arcade-flavoured moon gravity)
+const THRUST_ACC = 34;             // m/s^2 at full burn
+const ROT_SPEED = 2.4;             // rad/s
+const FUEL_MAX = 100;
+const FUEL_BURN = 7.5;             // units/s at full burn
+const SAFE_VY = 12;                // max descent speed m/s
+const SAFE_VX = 8;                 // max horizontal speed m/s
+const SAFE_TILT = 0.25;            // rad from vertical
+const LANDER_R = 14;               // collision radius, metres
+
+const COL = {
+  sky:        "#05070c",
+  terrain:    "#141a22",
+  terrainEdge:"#8fa4b8",
+  pad:        "#7dff8a",
+  padPost:    "#3b6a45",
+  ship:       "#e8eef4",
+  shipDark:   "#9db0c0",
+  window:     "#7de8ff",
+  leg:        "#b6c4d2",
+  flameCore:  "#fff3b0",
+  flameMid:   "#ffb347",
+  flameOut:   "#ff5d3d",
+  star:       "#c9d6e2",
+  hudGood:    "#7dff8a",
+  hudWarn:    "#ffd166",
+  hudBad:     "#ff5d5d",
+  hudText:    "#dfe9f2",
+  hudDim:     "#6a7a8a",
+  hudCyan:    "#7de8ff",
+};
+
+/* ================= canvas ================= */
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let viewW = 0, viewH = 0, dpr = 1;
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  viewW = window.innerWidth;
+  viewH = window.innerHeight;
+  canvas.width = Math.round(viewW * dpr);
+  canvas.height = Math.round(viewH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ================= audio (synthesised, no assets) ================= */
+
+const Sound = {
+  ac: null, muted: false,
+  thrustNoise: null, thrustGain: null,
+
+  ensure() {
+    if (this.ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ac = new AC();
+
+    // looping white-noise buffer for the engine
+    const len = this.ac.sampleRate;
+    const buf = this.ac.createBuffer(1, len, this.ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = this.ac.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filt = this.ac.createBiquadFilter();
+    filt.type = "lowpass"; filt.frequency.value = 420;
+    const gain = this.ac.createGain();
+    gain.gain.value = 0;
+    src.connect(filt).connect(gain).connect(this.ac.destination);
+    src.start();
+    this.thrustNoise = src; this.thrustGain = gain;
+  },
+  resume() { if (this.ac && this.ac.state === "suspended") this.ac.resume(); },
+  setThrust(on) {
+    if (!this.ac || !this.thrustGain) return;
+    const t = this.ac.currentTime;
+    const target = (on && !this.muted) ? 0.16 : 0;
+    this.thrustGain.gain.setTargetAtTime(target, t, 0.05);
+  },
+  beep(freq, dur, type, vol) {
+    if (!this.ac || this.muted) return;
+    const t = this.ac.currentTime;
+    const o = this.ac.createOscillator();
+    const g = this.ac.createGain();
+    o.type = type || "square";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.ac.destination);
+    o.start(t); o.stop(t + dur);
+  },
+  explosion() {
+    if (!this.ac || this.muted) return;
+    const t = this.ac.currentTime;
+    const len = Math.floor(this.ac.sampleRate * 0.9);
+    const buf = this.ac.createBuffer(1, len, this.ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = this.ac.createBufferSource(); src.buffer = buf;
+    const filt = this.ac.createBiquadFilter();
+    filt.type = "lowpass"; filt.frequency.setValueAtTime(900, t);
+    filt.frequency.exponentialRampToValueAtTime(120, t + 0.8);
+    const g = this.ac.createGain(); g.gain.value = 0.5;
+    src.connect(filt).connect(g).connect(this.ac.destination);
+    src.start();
+  },
+  fanfare() {
+    [523, 659, 784, 1047].forEach((f, i) =>
+      setTimeout(() => this.beep(f, 0.22, "triangle", 0.14), i * 130));
+  },
+};
+
+/* ================= helpers ================= */
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* ================= terrain ================= */
+
+let terrain = [];   // [{x, y}] left→right, y = world height of surface
+let pads = [];      // [{x1, x2, y, mult}]
+
+function generateTerrain(level) {
+  // midpoint displacement over a fixed grid
+  const N = 256;
+  const ys = new Float32Array(N + 1);
+  ys[0] = rand(0.25, 0.5) * WORLD_H;
+  ys[N] = rand(0.25, 0.5) * WORLD_H;
+
+  const roughness = 0.55 + Math.min(level, 6) * 0.03;
+  (function subdivide(lo, hi, disp) {
+    if (hi - lo < 2) return;
+    const mid = (lo + hi) >> 1;
+    ys[mid] = clamp(
+      (ys[lo] + ys[hi]) / 2 + rand(-disp, disp),
+      WORLD_H * 0.06, WORLD_H * 0.62
+    );
+    subdivide(lo, mid, disp * roughness);
+    subdivide(mid, hi, disp * roughness);
+  })(0, N, WORLD_H * 0.28);
+
+  terrain = [];
+  for (let i = 0; i <= N; i++) {
+    terrain.push({ x: (i / N) * WORLD_W, y: ys[i] });
+  }
+
+  // carve landing pads: flatten runs of points; fewer/narrower with level
+  pads = [];
+  const padCount = Math.max(2, 4 - Math.floor(level / 3));
+  const usable = [];
+  for (let k = 0; k < padCount; k++) {
+    // pick a random start index away from edges and existing pads
+    let tries = 0, start = -1, span = 0;
+    const targetSpanPts = Math.max(3, 7 - Math.floor(level / 2) - k); // narrower pads later in list
+    while (tries++ < 60) {
+      const s = Math.floor(rand(8, N - 8 - targetSpanPts));
+      let ok = true;
+      for (const u of usable) {
+        if (Math.abs(s - u) < targetSpanPts + 14) { ok = false; break; }
+      }
+      if (ok) { start = s; span = targetSpanPts; break; }
+    }
+    if (start < 0) continue;
+    usable.push(start);
+
+    const y = Math.min(...terrain.slice(start, start + span + 1).map(p => p.y));
+    for (let i = start; i <= start + span; i++) terrain[i].y = y;
+
+    const x1 = terrain[start].x, x2 = terrain[start + span].x;
+    const widthM = x2 - x1;
+    const mult = widthM < 55 ? 5 : widthM < 80 ? 3 : 2;
+    pads.push({ x1, x2, y, mult });
+  }
+  pads.sort((a, b) => a.x1 - b.x1);
+}
+
+function surfaceAt(x) {
+  // world y of terrain surface at world x (linear interp)
+  x = clamp(x, 0, WORLD_W - 0.001);
+  const seg = (x / WORLD_W) * (terrain.length - 1);
+  const i = Math.floor(seg);
+  const t = seg - i;
+  return lerp(terrain[i].y, terrain[i + 1].y, t);
+}
+
+function padUnder(x) {
+  for (const p of pads) if (x >= p.x1 && x <= p.x2) return p;
+  return null;
+}
+
+/* ================= stars ================= */
+
+let stars = [];
+function generateStars() {
+  stars = [];
+  for (let i = 0; i < 220; i++) {
+    stars.push({
+      x: Math.random() * WORLD_W,
+      y: rand(WORLD_H * 0.25, WORLD_H),   // upper world region (y up)
+      s: Math.random() < 0.15 ? 2 : 1,
+      tw: Math.random() * Math.PI * 2,
+    });
+  }
+}
+
+/* ================= particles ================= */
+
+let particles = [];
+function spawnParticles(x, y, vx, vy, n, opts) {
+  for (let i = 0; i < n; i++) {
+    const a = rand(opts.aMin, opts.aMax);
+    const sp = rand(opts.spMin, opts.spMax);
+    particles.push({
+      x, y,
+      vx: vx + Math.cos(a) * sp,
+      vy: vy + Math.sin(a) * sp,
+      life: rand(opts.lifeMin, opts.lifeMax),
+      age: 0,
+      size: rand(opts.sizeMin, opts.sizeMax),
+      colors: opts.colors,
+      grav: opts.grav || 0,
+    });
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.age += dt;
+    if (p.age >= p.life) { particles.splice(i, 1); continue; }
+    p.vy -= p.grav * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+}
+
+/* ================= lander ================= */
+
+const lander = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  angle: 0,          // 0 = upright; +ve = tilted right (clockwise on screen)
+  fuel: FUEL_MAX,
+  thrusting: false,
+  alive: true,
+  landed: false,
+};
+
+function resetLander() {
+  lander.x = rand(WORLD_W * 0.2, WORLD_W * 0.8);
+  lander.y = WORLD_H * 0.88;
+  lander.vx = Math.random() < 0.5 ? rand(15, 35) : rand(-35, -15);
+  lander.vy = rand(-12, -4);
+  lander.angle = clamp(lander.vx * 0.012, -0.5, 0.5);
+  lander.fuel = FUEL_MAX;
+  lander.thrusting = false;
+  lander.alive = true;
+  lander.landed = false;
+}
+
+/* ================= game state ================= */
+
+const game = {
+  state: "menu",     // menu | playing | landed | crashed | paused
+  level: 1,
+  score: 0,
+  time: 0,
+  resultTimer: 0,
+  shake: 0,
+  lastLandingInfo: null,
+};
+
+function startLevel() {
+  generateTerrain(game.level);
+  generateStars();
+  resetLander();
+  particles = [];
+  game.time = 0;
+  game.state = "playing";
+  game.shake = 0;
+  hide(menuEl); hide(resultEl);
+}
+
+function altitudeAGL() {
+  return lander.y - surfaceAt(lander.x) - LANDER_R;
+}
+
+/* ================= input ================= */
+
+const keys = { left: false, right: false, thrust: false };
+
+function onKey(e, down) {
+  const k = e.code;
+  if (["ArrowLeft", "KeyA"].includes(k)) { keys.left = down; e.preventDefault(); }
+  else if (["ArrowRight", "KeyD"].includes(k)) { keys.right = down; e.preventDefault(); }
+  else if (["ArrowUp", "KeyW", "Space"].includes(k)) {
+    e.preventDefault();
+    if (down && game.state === "menu") { beginGame(); return; }
+    if (down && (game.state === "landed" || game.state === "crashed")) {
+      if (game.resultTimer > 0.6) continueAfterResult();
+      return;
+    }
+    keys.thrust = down;
+  }
+  else if (down && k === "KeyP" && (game.state === "playing" || game.state === "paused")) {
+    game.state = game.state === "paused" ? "playing" : "paused";
+  }
+  else if (down && k === "KeyR" && game.state !== "menu") {
+    startLevel();
+  }
+  else if (down && k === "KeyM") {
+    Sound.muted = !Sound.muted;
+    if (Sound.muted) Sound.setThrust(false);
+  }
+  else if (down && k === "Enter") {
+    if (game.state === "menu") beginGame();
+    else if (game.state === "landed" || game.state === "crashed") {
+      if (game.resultTimer > 0.6) continueAfterResult();
+    }
+  }
+}
+window.addEventListener("keydown", e => onKey(e, true));
+window.addEventListener("keyup", e => onKey(e, false));
+
+/* touch buttons */
+function bindTouch(id, prop) {
+  const el = document.getElementById(id);
+  const set = (v, ev) => {
+    ev.preventDefault();
+    keys[prop] = v;
+    el.classList.toggle("pressed", v);
+    Sound.ensure(); Sound.resume();
+  };
+  el.addEventListener("touchstart", e => set(true, e), { passive: false });
+  el.addEventListener("touchend", e => set(false, e), { passive: false });
+  el.addEventListener("touchcancel", e => set(false, e), { passive: false });
+  el.addEventListener("mousedown", e => set(true, e));
+  el.addEventListener("mouseup", e => set(false, e));
+  el.addEventListener("mouseleave", e => { keys[prop] = false; el.classList.remove("pressed"); });
+}
+bindTouch("t-left", "left");
+bindTouch("t-right", "right");
+bindTouch("t-thrust", "thrust");
+if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+  document.body.classList.add("touch-on");
+}
+
+// tap anywhere to advance result screen (for touch devices)
+window.addEventListener("pointerdown", () => {
+  if ((game.state === "landed" || game.state === "crashed") && game.resultTimer > 0.6) {
+    continueAfterResult();
+  }
+});
+
+/* ================= physics ================= */
+
+function updatePlaying(dt) {
+  game.time += dt;
+
+  if (keys.left)  lander.angle -= ROT_SPEED * dt;
+  if (keys.right) lander.angle += ROT_SPEED * dt;
+  lander.angle = clamp(lander.angle, -Math.PI, Math.PI);
+
+  lander.thrusting = keys.thrust && lander.fuel > 0;
+  Sound.setThrust(lander.thrusting);
+
+  let ax = 0, ay = -GRAVITY;
+  if (lander.thrusting) {
+    ax += Math.sin(lander.angle) * THRUST_ACC;
+    ay += Math.cos(lander.angle) * THRUST_ACC;
+    lander.fuel = Math.max(0, lander.fuel - FUEL_BURN * dt);
+
+    // exhaust particles from the nozzle
+    const nx = lander.x - Math.sin(lander.angle) * LANDER_R;
+    const ny = lander.y - Math.cos(lander.angle) * LANDER_R;
+    const ejectA = -Math.PI / 2 - lander.angle; // math-angle pointing "down" from ship
+    spawnParticles(nx, ny, lander.vx * 0.4, lander.vy * 0.4, 3, {
+      aMin: ejectA - 0.35, aMax: ejectA + 0.35,
+      spMin: 60, spMax: 130,
+      lifeMin: 0.15, lifeMax: 0.45,
+      sizeMin: 1.5, sizeMax: 3.5,
+      colors: [COL.flameCore, COL.flameMid, COL.flameOut],
+    });
+  }
+
+  lander.vx += ax * dt;
+  lander.vy += ay * dt;
+  lander.x += lander.vx * dt;
+  lander.y += lander.vy * dt;
+
+  // wrap horizontally like the classic
+  if (lander.x < 0) lander.x += WORLD_W;
+  if (lander.x >= WORLD_W) lander.x -= WORLD_W;
+
+  // ceiling: gently push back
+  if (lander.y > WORLD_H) { lander.y = WORLD_H; lander.vy = Math.min(lander.vy, 0); }
+
+  // ground contact — sample under both legs
+  const legSpread = LANDER_R * 0.85;
+  const lx = lander.x - Math.cos(lander.angle) * legSpread;
+  const rx = lander.x + Math.cos(lander.angle) * legSpread;
+  const bottomY = lander.y - LANDER_R;
+  const gl = surfaceAt(lx), gr = surfaceAt(rx), gc = surfaceAt(lander.x);
+  const ground = Math.max(gl, gr, gc);
+
+  if (bottomY <= ground) {
+    resolveContact(ground);
+  }
+}
+
+function resolveContact(groundY) {
+  const pad = padUnder(lander.x);
+  const fullyOnPad = pad && (lander.x - LANDER_R * 0.8) >= pad.x1 && (lander.x + LANDER_R * 0.8) <= pad.x2;
+  // y axis points up, so descending means vy < 0
+  const descentOK = (-lander.vy) <= SAFE_VY;
+  const driftOK = Math.abs(lander.vx) <= SAFE_VX;
+  const tiltOK = Math.abs(lander.angle) <= SAFE_TILT;
+
+  lander.y = groundY + LANDER_R;
+
+  if (fullyOnPad && descentOK && driftOK && tiltOK) {
+    // touchdown!
+    const speedBonus = Math.round(clamp(SAFE_VY - (-lander.vy), 0, SAFE_VY) * 8);
+    const fuelBonus = Math.round(lander.fuel * 5);
+    const base = 100 * pad.mult;
+    const gained = base + speedBonus + fuelBonus;
+    game.score += gained;
+    game.lastLandingInfo = {
+      pad, gained, base, speedBonus, fuelBonus,
+      vy: -lander.vy, vx: lander.vx,
+    };
+    lander.vx = 0; lander.vy = 0; lander.angle = 0;
+    lander.landed = true;
+    lander.thrusting = false;
+    Sound.setThrust(false);
+    Sound.fanfare();
+    game.state = "landed";
+    game.resultTimer = 0;
+    showResult(true);
+  } else {
+    crash();
+  }
+}
+
+function crash() {
+  lander.alive = false;
+  lander.thrusting = false;
+  Sound.setThrust(false);
+  Sound.explosion();
+  game.shake = 1;
+  game.state = "crashed";
+  game.resultTimer = 0;
+
+  spawnParticles(lander.x, lander.y, 0, 0, 90, {
+    aMin: 0, aMax: Math.PI * 2,
+    spMin: 20, spMax: 190,
+    lifeMin: 0.4, lifeMax: 1.6,
+    sizeMin: 1.5, sizeMax: 4.5,
+    colors: [COL.flameCore, COL.flameMid, COL.flameOut, COL.shipDark],
+    grav: GRAVITY * 0.7,
+  });
+  spawnParticles(lander.x, lander.y, 0, 0, 26, {
+    aMin: Math.PI * 0.1, aMax: Math.PI * 0.9,
+    spMin: 40, spMax: 150,
+    lifeMin: 0.8, lifeMax: 2.2,
+    sizeMin: 2, sizeMax: 5,
+    colors: [COL.ship, COL.leg],
+    grav: GRAVITY,
+  });
+  showResult(false);
+}
+
+/* ================= camera ================= */
+
+const cam = { x: 0, y: 0, zoom: 1 };
+
+function updateCamera(dt) {
+  // zoom in when close to the ground, out when high
+  const alt = Math.max(0, altitudeAGL());
+  const targetZoom = alt < 100 ? 3.6 : alt < 340 ? lerp(3.6, 1.0, (alt - 100) / 240) : 1.0;
+
+  const baseZoom = Math.max(viewW / WORLD_W, viewH / WORLD_H) * 1.02;
+  const z = baseZoom * targetZoom;
+
+  let tx = lander.x, ty = lander.y + 40;
+  // keep view inside world bounds
+  const halfW = viewW / (2 * z), halfH = viewH / (2 * z);
+  tx = clamp(tx, halfW, WORLD_W - halfW);
+  ty = clamp(ty, halfH, WORLD_H - halfH);
+
+  const ease = 1 - Math.pow(0.001, dt);
+  cam.zoom = lerp(cam.zoom || z, z, ease);
+  cam.x = lerp(cam.x || tx, tx, ease);
+  cam.y = lerp(cam.y || ty, ty, ease);
+}
+
+// world (y-up) → screen
+function w2sX(x) { return (x - cam.x) * cam.zoom + viewW / 2; }
+function w2sY(y) { return viewH / 2 - (y - cam.y) * cam.zoom; }
+
+/* ================= drawing ================= */
+
+function drawStars(t) {
+  ctx.fillStyle = COL.star;
+  for (const s of stars) {
+    const sx = w2sX(s.x), sy = w2sY(s.y);
+    if (sx < -4 || sx > viewW + 4 || sy < -4 || sy > viewH + 4) continue;
+    const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.9 + s.tw));
+    ctx.globalAlpha = a;
+    ctx.fillRect(sx, sy, s.s, s.s);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTerrain() {
+  ctx.beginPath();
+  ctx.moveTo(w2sX(terrain[0].x), w2sY(terrain[0].y));
+  for (let i = 1; i < terrain.length; i++) {
+    ctx.lineTo(w2sX(terrain[i].x), w2sY(terrain[i].y));
+  }
+  ctx.lineTo(w2sX(WORLD_W), viewH + 4);
+  ctx.lineTo(w2sX(0), viewH + 4);
+  ctx.closePath();
+  ctx.fillStyle = COL.terrain;
+  ctx.fill();
+  ctx.strokeStyle = COL.terrainEdge;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // pads
+  for (const p of pads) {
+    const x1 = w2sX(p.x1), x2 = w2sX(p.x2), y = w2sY(p.y);
+    if (x2 < -20 || x1 > viewW + 20) continue;
+    ctx.fillStyle = COL.pad;
+    ctx.fillRect(x1, y - 3, x2 - x1, 4);
+    // posts
+    ctx.fillStyle = COL.padPost;
+    ctx.fillRect(x1, y, 3, 10 * Math.min(cam.zoom, 1.4));
+    ctx.fillRect(x2 - 3, y, 3, 10 * Math.min(cam.zoom, 1.4));
+    // multiplier label
+    const cx = (x1 + x2) / 2;
+    ctx.fillStyle = COL.pad;
+    ctx.font = `bold ${Math.round(11 * Math.min(cam.zoom, 1.6))}px "Courier New", monospace`;
+    ctx.textAlign = "center";
+    ctx.fillText("x" + p.mult, cx, y + 16 * Math.min(cam.zoom, 1.4) + 10);
+  }
+}
+
+function drawLander(t) {
+  if (!lander.alive) return;
+  const sx = w2sX(lander.x), sy = w2sY(lander.y);
+  const s = cam.zoom;   // scale
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(lander.angle);
+  ctx.scale(s, s);
+
+  // flame (drawn first, behind ship)
+  if (lander.thrusting) {
+    const flick = 0.75 + 0.25 * Math.sin(t * 55);
+    const fl = 20 * flick;
+    ctx.fillStyle = COL.flameOut;
+    ctx.beginPath();
+    ctx.moveTo(-5, 12); ctx.lineTo(5, 12); ctx.lineTo(0, 12 + fl);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = COL.flameMid;
+    ctx.beginPath();
+    ctx.moveTo(-3.4, 12); ctx.lineTo(3.4, 12); ctx.lineTo(0, 12 + fl * 0.66);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = COL.flameCore;
+    ctx.beginPath();
+    ctx.moveTo(-1.8, 12); ctx.lineTo(1.8, 12); ctx.lineTo(0, 12 + fl * 0.36);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // legs
+  ctx.strokeStyle = COL.leg;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(-5, 7);  ctx.lineTo(-11, 14);
+  ctx.moveTo(5, 7);   ctx.lineTo(11, 14);
+  ctx.stroke();
+  // feet
+  ctx.beginPath();
+  ctx.moveTo(-13.5, 14); ctx.lineTo(-8.5, 14);
+  ctx.moveTo(8.5, 14);   ctx.lineTo(13.5, 14);
+  ctx.stroke();
+
+  // descent stage (box)
+  ctx.fillStyle = COL.shipDark;
+  ctx.fillRect(-8, 3, 16, 6);
+  // nozzle
+  ctx.beginPath();
+  ctx.moveTo(-4, 9); ctx.lineTo(4, 9); ctx.lineTo(6, 12); ctx.lineTo(-6, 12);
+  ctx.closePath(); ctx.fill();
+
+  // ascent stage (dome)
+  ctx.fillStyle = COL.ship;
+  ctx.beginPath();
+  ctx.moveTo(-8, 3);
+  ctx.lineTo(-8, -3);
+  ctx.lineTo(-4, -9);
+  ctx.lineTo(4, -9);
+  ctx.lineTo(8, -3);
+  ctx.lineTo(8, 3);
+  ctx.closePath();
+  ctx.fill();
+
+  // window
+  ctx.fillStyle = COL.window;
+  ctx.beginPath();
+  ctx.arc(0, -3, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const f = 1 - p.age / p.life;
+    ctx.globalAlpha = f;
+    ctx.fillStyle = p.colors[Math.floor(f * (p.colors.length - 0.001))] || p.colors[0];
+    const sz = p.size * cam.zoom * (0.5 + f * 0.5);
+    ctx.fillRect(w2sX(p.x) - sz / 2, w2sY(p.y) - sz / 2, sz, sz);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ================= HUD ================= */
+
+function fmt(v, digits) { return v.toFixed(digits === undefined ? 0 : digits); }
+
+function drawHUD() {
+  const pad = 14;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  // left column: telemetry
+  const vyDesc = -lander.vy;              // + = descending
+  const alt = Math.max(0, altitudeAGL());
+
+  const rows = [
+    ["ALT",  fmt(alt) + " m",              COL.hudText],
+    ["VSPD", fmt(vyDesc, 1) + " m/s",
+      vyDesc > SAFE_VY ? COL.hudBad : vyDesc > SAFE_VY * 0.72 ? COL.hudWarn : COL.hudGood],
+    ["HSPD", fmt(Math.abs(lander.vx), 1) + " m/s",
+      Math.abs(lander.vx) > SAFE_VX ? COL.hudBad : Math.abs(lander.vx) > SAFE_VX * 0.72 ? COL.hudWarn : COL.hudGood],
+    ["TILT", fmt(Math.abs(lander.angle) * 57.2958) + "\u00B0",
+      Math.abs(lander.angle) > SAFE_TILT ? COL.hudBad : COL.hudGood],
+  ];
+  ctx.font = 'bold 13px "Courier New", monospace';
+  rows.forEach((r, i) => {
+    const y = pad + i * 20;
+    ctx.fillStyle = COL.hudDim;
+    ctx.fillText(r[0], pad, y);
+    ctx.fillStyle = r[2];
+    ctx.fillText(r[1], pad + 52, y);
+  });
+
+  // fuel bar
+  const fy = pad + rows.length * 20 + 6;
+  const fw = 130, fh = 10;
+  ctx.fillStyle = COL.hudDim;
+  ctx.fillText("FUEL", pad, fy - 2);
+  ctx.strokeStyle = COL.hudDim;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad + 52, fy, fw, fh);
+  const frac = lander.fuel / FUEL_MAX;
+  ctx.fillStyle = frac < 0.2 ? COL.hudBad : frac < 0.45 ? COL.hudWarn : COL.hudGood;
+  ctx.fillRect(pad + 52 + 1, fy + 1, (fw - 2) * frac, fh - 2);
+  if (frac === 0 && game.state === "playing" && Math.floor(game.time * 3) % 2 === 0) {
+    ctx.fillStyle = COL.hudBad;
+    ctx.fillText("OUT OF FUEL", pad + 52 + fw + 10, fy - 2);
+  }
+
+  // right column: score / level
+  ctx.textAlign = "right";
+  ctx.fillStyle = COL.hudDim;
+  ctx.fillText("SCORE", viewW - pad - 70, pad);
+  ctx.fillText("LEVEL", viewW - pad - 70, pad + 20);
+  ctx.fillStyle = COL.hudText;
+  ctx.fillText(String(game.score), viewW - pad, pad);
+  ctx.fillText(String(game.level), viewW - pad, pad + 20);
+  if (Sound.muted) {
+    ctx.fillStyle = COL.hudDim;
+    ctx.fillText("MUTED", viewW - pad, pad + 40);
+  }
+
+  // landing guidance arrow to nearest pad when off-screen high up
+  if (game.state === "playing") {
+    const nearest = pads.reduce((best, p) => {
+      const cx = (p.x1 + p.x2) / 2;
+      const d = Math.min(
+        Math.abs(cx - lander.x),
+        WORLD_W - Math.abs(cx - lander.x)
+      );
+      return !best || d < best.d ? { p, d, cx } : best;
+    }, null);
+    if (nearest && nearest.d > 250) {
+      let dir = nearest.cx - lander.x;
+      if (Math.abs(dir) > WORLD_W / 2) dir = -dir;
+      ctx.fillStyle = COL.hudCyan;
+      ctx.textAlign = "center";
+      ctx.font = 'bold 16px "Courier New", monospace';
+      ctx.fillText(dir > 0 ? "PAD \u2192" : "\u2190 PAD", viewW / 2, pad);
+    }
+  }
+
+  if (game.state === "paused") {
+    ctx.fillStyle = "rgba(5,7,12,0.65)";
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.fillStyle = COL.hudCyan;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = 'bold 30px "Courier New", monospace';
+    ctx.fillText("PAUSED", viewW / 2, viewH / 2);
+    ctx.font = 'bold 13px "Courier New", monospace';
+    ctx.fillStyle = COL.hudDim;
+    ctx.fillText("press P to resume", viewW / 2, viewH / 2 + 34);
+  }
+}
+
+/* ================= overlays ================= */
+
+const menuEl = document.getElementById("menu");
+const resultEl = document.getElementById("result");
+const resultTitle = document.getElementById("result-title");
+const resultDetail = document.getElementById("result-detail");
+
+function show(el) { el.classList.remove("hidden"); }
+function hide(el) { el.classList.add("hidden"); }
+
+function showResult(success) {
+  if (success) {
+    const i = game.lastLandingInfo;
+    resultTitle.textContent = "TOUCHDOWN";
+    resultTitle.className = "bigmsg good";
+    resultDetail.innerHTML =
+      `Pad x${i.pad.mult} &nbsp;&middot;&nbsp; descent ${fmt(i.vy, 1)} m/s &nbsp;&middot;&nbsp; drift ${fmt(Math.abs(i.vx), 1)} m/s<br>` +
+      `base <b>${i.base}</b> + soft-landing <b>${i.speedBonus}</b> + fuel <b>${i.fuelBonus}</b><br>` +
+      `= <b>+${i.gained} pts</b>`;
+    document.getElementById("btn-again").textContent = "NEXT MISSION";
+  } else {
+    const reasons = [];
+    if (-lander.vy > SAFE_VY) reasons.push(`descent ${fmt(-lander.vy, 1)} m/s (max ${SAFE_VY})`);
+    if (Math.abs(lander.vx) > SAFE_VX) reasons.push(`drift ${fmt(Math.abs(lander.vx), 1)} m/s (max ${SAFE_VX})`);
+    if (Math.abs(lander.angle) > SAFE_TILT) reasons.push(`tilt ${fmt(Math.abs(lander.angle) * 57.3)}\u00B0`);
+    if (!padUnder(lander.x)) reasons.push("not on a pad");
+    resultTitle.textContent = "CRASHED";
+    resultTitle.className = "bigmsg bad";
+    resultDetail.innerHTML = reasons.length
+      ? "Cause: " + reasons.join("<br>")
+      : "The lander broke apart on impact.";
+    document.getElementById("btn-again").textContent = "RETRY";
+  }
+  // reveal after a short beat so the crash/landing is visible
+  setTimeout(() => {
+    if (game.state === "landed" || game.state === "crashed") show(resultEl);
+  }, 900);
+}
+
+function continueAfterResult() {
+  if (game.state !== "landed" && game.state !== "crashed") return;
+  if (game.state === "landed") game.level += 1;
+  else game.score = Math.max(0, game.score - 50);
+  startLevel();
+}
+
+function beginGame() {
+  Sound.ensure(); Sound.resume();
+  game.level = 1;
+  game.score = 0;
+  startLevel();
+}
+
+document.getElementById("btn-start").addEventListener("click", beginGame);
+document.getElementById("btn-again").addEventListener("click", continueAfterResult);
+
+/* ================= main loop ================= */
+
+// pre-generate a scene behind the menu
+generateTerrain(1);
+generateStars();
+resetLander();
+cam.zoom = 0; cam.x = 0; cam.y = 0;
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min((now - lastT) / 1000, 0.05);
+  lastT = now;
+  const t = now / 1000;
+
+  if (game.state === "playing") {
+    updatePlaying(dt);
+  }
+  if (game.state === "landed" || game.state === "crashed") {
+    game.resultTimer += dt;
+  }
+  updateParticles(dt);
+  updateCamera(dt);
+  game.shake = Math.max(0, game.shake - dt * 1.4);
+
+  // ---- render ----
+  ctx.fillStyle = COL.sky;
+  ctx.fillRect(0, 0, viewW, viewH);
+
+  ctx.save();
+  if (game.shake > 0) {
+    const m = game.shake * 9;
+    ctx.translate(rand(-m, m), rand(-m, m));
+  }
+  drawStars(t);
+  drawTerrain();
+  drawParticles();
+  drawLander(t);
+  ctx.restore();
+
+  if (game.state !== "menu") drawHUD();
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
